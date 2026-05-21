@@ -10,10 +10,7 @@ export interface LlmMessage {
 }
 
 export interface LlmChatOptions {
-  /** Max output tokens budget for the request. */
-  maxTokens?: number;
-
-  /** Request timeout in milliseconds. */
+  /** Request timeout in milliseconds. Hard `max_tokens` caps belong in `LLM_EXTRA_BODY`. */
   timeoutMs?: number;
 }
 

@@ -235,15 +235,13 @@ The tables below list only the **commonly tuned** keys. Open `.env.example` for 
 | `LLM_CONCURRENCY` | `1`                               | Max concurrent per-URL LLM workflows.                   |
 | `LLM_EXTRA_BODY`  | empty                             | Example: `{"temperature":0.7, ...}`. Any key wins.      |
 
-LLM calls intentionally use the lowest common denominator: Chat Completions, `system` and `user` messages only, and `max_tokens` derived from the stage output ratio. No sampler defaults are sent; operators set them through `LLM_EXTRA_BODY` when needed. No Responses API. No `developer` role. This keeps the provider usable with llama.cpp, vLLM, SGLang, and similar local servers.
-
 ### Stages
 
-| Variable                | Default | Notes                                                                                              |
-| ----------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `CLEAN_ENABLED`         | `true`  | Enables the clean stage.                                                                           |
-| `SUMMARIZE_ENABLED`     | `false` | Enables the summarize stage.                                                                       |
-| `TRUNCATE_TARGET_CHARS` | `25000` | Final body cap before footer is appended. `0` disables truncation.                                 |
+| Variable                | Default | Notes                                                                 |
+| ----------------------- | ------- | ----------------------------------------------------------------------|
+| `CLEAN_ENABLED`         | `true`  | Enables the clean stage.                                              |
+| `SUMMARIZE_ENABLED`     | `false` | Enables the summarize stage.                                          |
+| `TRUNCATE_TARGET_CHARS` | `25000` | Final body cap before footer is appended. `0` disables truncation.    |
 
 Each stage exposes the same knobs under a shared naming convention: `<STAGE>_ENABLED`, `<STAGE>_MIN_INPUT_CHARS`, `<STAGE>_MAX_INPUT_CHARS`, `<STAGE>_OUTPUT_RATIO`, `<STAGE>_TIMEOUT_SECONDS`, `<STAGE>_QUALITY_MIN_RATIO`, `<STAGE>_CHECK_URLS`. See `.env.example` for the full list and per-stage defaults.
 

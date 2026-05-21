@@ -13,7 +13,6 @@ import { joinUrl } from "../../../core/util/urls.js";
 // Handles untrusted external content at the response parsing security boundary.
 
 const DEFAULT_TIMEOUT_MS = 60_000;
-const DEFAULT_MAX_TOKENS = 4096;
 
 /** Slugify upstream error codes before interpolating them in AppError codes. */
 function sanitizeUpstreamCode(value: unknown): string {
@@ -57,7 +56,6 @@ export class OpenAiChatLlmProvider implements LlmProvider {
   /** Execute one chat request and return normalized model text output. */
   async chat(messages: LlmMessage[], options: LlmChatOptions = {}): Promise<LlmChatResult> {
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS;
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -71,7 +69,6 @@ export class OpenAiChatLlmProvider implements LlmProvider {
       const body = {
         model: this.config.LLM_MODEL,
         messages,
-        max_tokens: maxTokens,
         ...this.config.LLM_EXTRA_BODY
       };
 

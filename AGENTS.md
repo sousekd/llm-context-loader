@@ -106,8 +106,7 @@ The LLM provider should work with local OpenAI-compatible servers such as llama.
   "messages": [
     {"role": "system", "content": "..."},
     {"role": "user", "content": "..."}
-  ],
-  "max_tokens": 8192
+  ]
 }
 ```
 

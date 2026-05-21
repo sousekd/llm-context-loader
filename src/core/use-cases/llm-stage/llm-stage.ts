@@ -4,7 +4,7 @@ import type { QualityRejectReason } from "../../cleanup/quality-gate.js";
 import type { TemplateRenderer } from "../../cleanup/templates.js";
 import type { LlmProvider } from "../../ports/llm-provider.js";
 
-import { checkEligibility, compactChars, estimateTokens } from "../../cleanup/length-policy.js";
+import { checkEligibility, compactChars } from "../../cleanup/length-policy.js";
 import { assessQuality } from "../../cleanup/quality-gate.js";
 import { reasonFromError } from "../../util/errors.js";
 
@@ -120,9 +120,6 @@ export class LlmStage {
       };
     }
 
-    const inputTokens = estimateTokens(inputChars, this.deps.app.LLM_CHARS_PER_TOKEN);
-    const maxTokens = Math.max(1, Math.floor(inputTokens * config.outputRatio));
-
     let text: string;
     let model: string | undefined;
     try {
@@ -132,7 +129,6 @@ export class LlmStage {
           { role: "user", content: userPrompt }
         ],
         {
-          maxTokens,
           timeoutMs: config.timeoutMs
         }
       );

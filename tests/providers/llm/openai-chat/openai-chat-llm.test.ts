@@ -38,15 +38,14 @@ describe("OpenAiChatLlmProvider", () => {
     await provider.chat([
       { role: "system", content: "S" },
       { role: "user", content: "U" }
-    ], { maxTokens: 123, timeoutMs: 1000 });
+    ], { timeoutMs: 1000 });
 
     expect(requestBody).toEqual({
       model: "test-model",
       messages: [
         { role: "system", content: "S" },
         { role: "user", content: "U" }
-      ],
-      max_tokens: 123
+      ]
     });
     expect(JSON.stringify(requestBody)).not.toContain('"role":"developer"');
   });
@@ -62,9 +61,9 @@ describe("OpenAiChatLlmProvider", () => {
       { fetchFn }
     );
 
-    await provider.chat([{ role: "user", content: "U" }], { maxTokens: 50 });
+    await provider.chat([{ role: "user", content: "U" }]);
 
-    expect(requestBody).toMatchObject({ temperature: 0.7, top_p: 0.8, top_k: 20, max_tokens: 50 });
+    expect(requestBody).toMatchObject({ temperature: 0.7, top_p: 0.8, top_k: 20 });
   });
 
   it("lets LLM_EXTRA_BODY override core fields including model and max_tokens", async () => {
@@ -78,7 +77,7 @@ describe("OpenAiChatLlmProvider", () => {
       { fetchFn }
     );
 
-    await provider.chat([{ role: "user", content: "U" }], { maxTokens: 50 });
+    await provider.chat([{ role: "user", content: "U" }]);
 
     expect(requestBody).toMatchObject({ model: "override-model", max_tokens: 999 });
   });

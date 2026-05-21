@@ -149,7 +149,7 @@ const EnvSchema = z.object({
   // Units: characters. Range: integer >= 0; 0 means no limit. Default: 75000.
   CLEAN_MAX_INPUT_CHARS: intish(75000).pipe(z.number().int().min(0)),
 
-  // Output token budget ratio used for clean stage max_tokens and eligibility.
+  // Output token budget ratio reserved for the clean stage in context-window eligibility projection.
   // Units: ratio. Range: number >= 0. Default: 0.5.
   CLEAN_OUTPUT_RATIO: numberish(0.5).pipe(z.number().min(0)),
 
@@ -177,7 +177,7 @@ const EnvSchema = z.object({
   // Units: characters. Range: integer >= 0; 0 means no limit. Default: 0.
   SUMMARIZE_MAX_INPUT_CHARS: intish(0).pipe(z.number().int().min(0)),
 
-  // Output token budget ratio used for summarize-stage max_tokens and eligibility.
+  // Output token budget ratio reserved for the summarize stage in context-window eligibility projection.
   // Units: ratio. Range: number >= 0. Default: 0.15.
   SUMMARIZE_OUTPUT_RATIO: numberish(0.15).pipe(z.number().min(0)),
 
