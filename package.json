@@ -1,0 +1,56 @@
+{
+  "name": "llm-context-loader",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Tiny LLM context loader: turns URLs into clean markdown for LLMs. Speaks Open WebUI's external web loader and Jina Reader-style GET /r/<url>; fetches via Firecrawl; optionally cleans via any OpenAI-compatible Chat Completions endpoint.",
+  "license": "MIT",
+  "author": "sousekd",
+  "homepage": "https://github.com/sousekd/llm-context-loader#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sousekd/llm-context-loader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sousekd/llm-context-loader/issues"
+  },
+  "keywords": [
+    "llm",
+    "open-webui",
+    "firecrawl",
+    "web-loader",
+    "context",
+    "markdown",
+    "scraping",
+    "openai-compatible",
+    "fastify"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "start": "node --env-file-if-exists=.env dist/main.js",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck:all": "tsc -p tsconfig.test.json",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "preversion": "npm run typecheck:all && npm run build && npm test"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "mustache": "^4.2.0",
+    "p-limit": "^6.2.0",
+    "pino": "^9.6.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/mustache": "^4.2.6",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^2.1.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

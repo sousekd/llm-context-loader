@@ -1,0 +1,36 @@
+# Build artifacts and dependencies (rebuilt inside the image)
+node_modules
+dist
+coverage
+*.tsbuildinfo
+
+# VCS
+.git
+.gitignore
+.gitattributes
+.github
+
+# Local config / secrets
+.env
+.env.*
+
+# Tests and dev tooling (not needed in runtime image)
+tests
+vitest.config.ts
+tsconfig.test.json
+scripts
+
+# Logs and editor noise
+npm-debug.log*
+*.log
+.vscode
+.idea
+.DS_Store
+
+# Repo docs (kept in the source tree, excluded from the image to keep it small)
+README.md
+docs
+AGENTS.md
+CONTRIBUTING.md
+docker-compose*.yml
+compose*.yaml
