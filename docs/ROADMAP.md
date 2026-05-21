@@ -1,6 +1,11 @@
 # Roadmap
 
-This file records scope boundaries for this small service. It is not a promise of future work; it is the place to check before adding features that change the shape of the project.
+This file records scope boundaries and the rough direction of this tool.
+It is the place to check and update before and after adding features.
+
+## Vision
+
+A self-hosted, cloud-free tool for loading content from URLs and giving the calling model exactly what it needs for the task at hand — without polluting the caller's context with boilerplate, navigation, or unrelated noise. Built for local LLM usage on limited hardware, where every token in the context window matters.
 
 ## Current scope
 
@@ -15,21 +20,44 @@ Implemented today:
 
 Current provider implementations are intentionally few. The interfaces exist so replacements can be added without rewriting the use case.
 
-## Deferred until needed
+## Coming soon
 
-Do not implement these without updating this file, [README.md](../README.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [AGENTS.md](../AGENTS.md) as needed:
+Improving what already exists before adding new surface area.
 
-- Additional fetch providers such as Crawl4AI, Playwright, or direct HTTP.
-- Document providers for PDF/Office extraction, likely around Docling.
-- MCP server client tools such as `load_url`, `ask_url`, or `extract_fields`.
-- CLI client.
-- Ask/extract modes that answer a question about a page instead of returning cleaned page context.
-- Durable queues, databases, persistent operational logs, or admin UI.
-- Chunking, indexing, retrieval, or embedding storage.
+- **URL hallucination repair.** The current quality gate already rejects stage output that introduces URLs absent from the source. Replace that all-or-nothing check with a deterministic repair pass.
+- **Diagnostics footer cleanup.** Consolidate the `<context_loader_info ... />` payload for consistency and readability.
+- **Better defaults and prompts.** Iterate on clean/summarize system prompts and the default length budgets (`CLEAN_*`, `SUMMARIZE_*`, `TRUNCATE_TARGET_CHARS`).
 
-## Non-goals
+## Short term
 
-- Replacing Firecrawl, Crawl4AI, Docling, model servers, or Open WebUI.
-- Becoming a general crawler, parser, model gateway, or RAG framework.
-- Adding LangChain, LlamaIndex, LiteLLM, Vercel AI SDK, NestJS, Express, Redis/BullMQ, or a Python runtime inside this service.
-- Adding hidden model-routing behavior. LLM calls should remain explicit and boring.
+Near-term additions once the current refinement pass settles.
+
+- **CLI** for terminal-preferring agents.
+- **MCP server for existing functionality.** Existing URL-to-context flow only.
+- **In-memory telemetry and simple UI.** Opt-in, in-memory statistics and recent request data for easier debugging.
+
+## Mid term
+
+Larger pieces that expand what the service can do without changing the core philosophy.
+
+- **Playwright fetch provider** to remove the hard dependency on a running Firecrawl instance, followed by:
+    - A fallback chain across fetch providers, optionally including cloud services such as Jina for those who want them rather than failing.
+- **MCP server client, expanded modes**, delivered in stages:
+    1. Add explicit modes: "give me an overview + index of this URL", "extract specific information from this URL".
+    2. Smart staged response: return short pages in full; for long pages return overview + index and prompt the caller to ask for specific sections.
+    3. Cache fetched pages to support the staged flow without repeated upstream calls.
+- **Configurable fetch pipelines** via a YAML config: ordered steps of typed stages (fetch, clean, summarize, extract, …), per-step run conditions, pre- and post-checks, support for different models or providers. Make the existing hard-coded pipeline declarative & customizable.
+- **Persistent stage telemetry.** Optional store for per-stage statistics and request data after the pipeline model is clear.
+
+## Long term
+
+Directions worth pursuing for broader usability.
+
+- **Non-HTML content handling:**
+    - URLs pointing at documents (PDF, Office) handled via external tools such as Docling.
+    - Image content surfaced via transcription/OCR.
+
+## Speculative / far future
+
+- Indexing, chunking, and RAG over long content, kept behind the same URL-in / context-out contract.
+- Dynamically maintained local knowledge base / wiki built from pages flowing through the fetch pipeline.
