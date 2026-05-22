@@ -1,0 +1,10 @@
+export { applySpanPatches } from "./apply-span-patches.js";
+export type { SpanPatch } from "./apply-span-patches.js";
+export { damerauLevenshteinBounded } from "./damerau-levenshtein.js";
+export { dedupeBy } from "./dedupe-by.js";
+export { jaccardSimilarity } from "./jaccard.js";
+export { longestCommonSubsequenceLength } from "./lcs.js";
+export { matchByScore } from "./match-by-score.js";
+export type { ScoreMatchOptions } from "./match-by-score.js";
+export type { MatchResult } from "./match-result.js";
+export { toMatchResult } from "./to-match-result.js";
