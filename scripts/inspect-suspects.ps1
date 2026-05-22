@@ -35,33 +35,33 @@
 
 [CmdletBinding()]
 param(
-    [string]   $UrlFile,
-    [string[]] $Urls,
-    [int]      $HeadBytes        = 600,
-    [int]      $TailBytes        = 400,
-    [int]      $HealthTimeoutSec = 5,
-    [switch]   $SkipHealthCheck
+  [string]   $UrlFile,
+  [string[]] $Urls,
+  [int]      $HeadBytes        = 600,
+  [int]      $TailBytes        = 400,
+  [int]      $HealthTimeoutSec = 5,
+  [switch]   $SkipHealthCheck
 )
 
 . (Join-Path $PSScriptRoot 'shared-lib.ps1')
 
 $defaultSuspects = @(
-    'https://www.w3schools.com/python/python_decorators.asp',
-    'https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/',
-    'https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html'
+  'https://www.w3schools.com/python/python_decorators.asp',
+  'https://gateway-api.sigs.k8s.io/guides/getting-started/migrating-from-ingress/',
+  'https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html'
 )
 
 if ($UrlFile) {
-    $Urls = Read-UrlFile -Path $UrlFile
+  $Urls = Read-UrlFile -Path $UrlFile
 } elseif ($Urls -and $Urls.Count -gt 0) {
-    $Urls = ConvertTo-UrlArray -Urls $Urls
+  $Urls = ConvertTo-UrlArray -Urls $Urls
 } else {
-    $Urls = $defaultSuspects
+  $Urls = $defaultSuspects
 }
 
 if (-not $Urls -or $Urls.Count -eq 0) {
-    Write-Host 'No URLs to inspect.' -ForegroundColor Red
-    exit 1
+  Write-Host 'No URLs to inspect.' -ForegroundColor Red
+  exit 1
 }
 
 $loader    = Get-LoaderDefaults
@@ -70,11 +70,11 @@ $loaderHeaders    = Get-BearerHeaders -ApiKey $loader.ApiKey
 $firecrawlHeaders = Get-BearerHeaders -ApiKey $firecrawl.ApiKey
 
 if (-not $SkipHealthCheck) {
-    if (-not (Wait-LoaderHealth -LoaderBase $loader.LoaderBase -TimeoutSec $HealthTimeoutSec)) {
-        Write-Host ("Loader health check failed at {0}/health within {1}s. Aborting." -f $loader.LoaderBase, $HealthTimeoutSec) -ForegroundColor Red
-        Write-Host 'Re-run with -SkipHealthCheck to bypass.' -ForegroundColor DarkGray
-        exit 1
-    }
+  if (-not (Wait-LoaderHealth -LoaderBase $loader.LoaderBase -TimeoutSec $HealthTimeoutSec)) {
+    Write-Host ("Loader health check failed at {0}/health within {1}s. Aborting." -f $loader.LoaderBase, $HealthTimeoutSec) -ForegroundColor Red
+    Write-Host 'Re-run with -SkipHealthCheck to bypass.' -ForegroundColor DarkGray
+    exit 1
+  }
 }
 
 $outDir = Join-Path $PSScriptRoot 'out'
@@ -82,11 +82,11 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # Footer attributes worth surfacing in the console preview.
 $footerHighlights = @(
-    'returned', 'final_chars',
-    'fetch_status', 'fetch_chars',
-    'clean_status', 'clean_ratio', 'clean_reason',
-    'summarize_status', 'summarize_ratio', 'summarize_reason',
-    'truncate_status'
+  'returned', 'final_chars',
+  'fetch_status', 'fetch_chars',
+  'clean_status', 'clean_ratio', 'clean_reason',
+  'summarize_status', 'summarize_ratio', 'summarize_reason',
+  'truncate_status'
 )
 
 Write-Host ("=== inspect {0} URLs ===" -f $Urls.Count) -ForegroundColor Cyan
@@ -96,67 +96,68 @@ Write-Host ("firecrawl: {0}" -f $firecrawl.BaseUrl)  -ForegroundColor DarkGray
 $ok = 0; $fail = 0
 
 foreach ($url in $Urls) {
-    $slug = ConvertTo-UrlSlug -Url $url
-    Write-Host "`n=== $slug ===" -ForegroundColor Cyan
-    Write-Host "  $url" -ForegroundColor DarkGray
+  $slug = ConvertTo-UrlSlug -Url $url
+  Write-Host "`n=== $slug ===" -ForegroundColor Cyan
+  Write-Host "  $url" -ForegroundColor DarkGray
 
-    $body = @{ url = $url; formats = @('markdown'); onlyMainContent = $true } | ConvertTo-Json -Compress
+  $body = @{ url = $url; formats = @('markdown'); onlyMainContent = $true } | ConvertTo-Json -Compress
 
-    $src = ''
-    try {
-        $firecrawlResponse = Invoke-RestMethod -Method POST `
-            -Uri "$($firecrawl.BaseUrl)/v2/scrape" `
-            -Headers $firecrawlHeaders -ContentType 'application/json' `
-            -Body $body -TimeoutSec 120
-        $src = $firecrawlResponse.data.markdown
-        if (-not $src) { $src = $firecrawlResponse.data.content }
-    } catch {
-        Write-Host ("  firecrawl ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
-        $fail++
-        continue
+  $src = ''
+  try {
+    $firecrawlResponse = Invoke-RestMethod -Method POST `
+      -Uri "$($firecrawl.BaseUrl)/v2/scrape" `
+      -Headers $firecrawlHeaders -ContentType 'application/json' `
+      -Body $body -TimeoutSec 120
+    $src = $firecrawlResponse.data.markdown
+    if (-not $src) { $src = $firecrawlResponse.data.content }
+  } catch {
+    Write-Host ("  firecrawl ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    $fail++
+    continue
+  }
+  Set-Content -LiteralPath (Join-Path $outDir "$slug.source.md") -Value $src -Encoding utf8
+
+  $clean = ''
+  try {
+    $loaderResponse = Invoke-WebRequest -Uri ("$($loader.LoaderBase)/r/" + $url) `
+      -Headers $loaderHeaders -UseBasicParsing -TimeoutSec 240
+    $clean = $loaderResponse.Content
+  } catch {
+    Write-Host ("  loader ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
+    $fail++
+    continue
+  }
+  Set-Content -LiteralPath (Join-Path $outDir "$slug.clean.md") -Value $clean -Encoding utf8
+
+  $footerLine = Get-LoaderFooterLine -Content $clean
+  Set-Content -LiteralPath (Join-Path $outDir "$slug.footer.txt") -Value $footerLine -Encoding utf8
+
+  Write-Host ("  source_chars={0}  clean_chars={1}" -f $src.Length, $clean.Length)
+
+  if ($footerLine) {
+    $attrs = Get-LoaderFooterAttrMap -Footer $footerLine
+    Write-Host '  --- FOOTER ---'
+    foreach ($name in $footerHighlights) {
+      if ($attrs.ContainsKey($name)) {
+        Write-Host ("    {0,-18} {1}" -f $name, $attrs[$name])
+      }
     }
-    Set-Content -LiteralPath (Join-Path $outDir "$slug.source.md") -Value $src -Encoding utf8
+  } else {
+    Write-Host '  --- FOOTER --- <none>'
+  }
 
-    $clean = ''
-    try {
-        $loaderResponse = Invoke-WebRequest -Uri ("$($loader.LoaderBase)/r/" + $url) `
-            -Headers $loaderHeaders -UseBasicParsing -TimeoutSec 240
-        $clean = $loaderResponse.Content
-    } catch {
-        Write-Host ("  loader ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
-        $fail++
-        continue
-    }
-    Set-Content -LiteralPath (Join-Path $outDir "$slug.clean.md") -Value $clean -Encoding utf8
+  Write-Host '  --- SOURCE head ---'
+  Write-Host ($src.Substring(0, [Math]::Min($HeadBytes, $src.Length)))
+  Write-Host '  --- SOURCE tail ---'
+  Write-Host ($src.Substring([Math]::Max(0, $src.Length - $TailBytes)))
+  Write-Host '  --- CLEAN head ---'
+  Write-Host ($clean.Substring(0, [Math]::Min($HeadBytes, $clean.Length)))
+  Write-Host '  --- CLEAN tail ---'
+  Write-Host ($clean.Substring([Math]::Max(0, $clean.Length - $TailBytes)))
 
-    $footerLine = Get-LoaderFooterLine -Content $clean
-    Set-Content -LiteralPath (Join-Path $outDir "$slug.footer.txt") -Value $footerLine -Encoding utf8
-
-    Write-Host ("  source_chars={0}  clean_chars={1}" -f $src.Length, $clean.Length)
-
-    if ($footerLine) {
-        $attrs = Get-LoaderFooterAttrMap -Footer $footerLine
-        Write-Host '  --- FOOTER ---'
-        foreach ($name in $footerHighlights) {
-            if ($attrs.ContainsKey($name)) {
-                Write-Host ("    {0,-18} {1}" -f $name, $attrs[$name])
-            }
-        }
-    } else {
-        Write-Host '  --- FOOTER --- <none>'
-    }
-
-    Write-Host '  --- SOURCE head ---'
-    Write-Host ($src.Substring(0, [Math]::Min($HeadBytes, $src.Length)))
-    Write-Host '  --- SOURCE tail ---'
-    Write-Host ($src.Substring([Math]::Max(0, $src.Length - $TailBytes)))
-    Write-Host '  --- CLEAN head ---'
-    Write-Host ($clean.Substring(0, [Math]::Min($HeadBytes, $clean.Length)))
-    Write-Host '  --- CLEAN tail ---'
-    Write-Host ($clean.Substring([Math]::Max(0, $clean.Length - $TailBytes)))
-
-    $ok++
+  $ok++
 }
 
 Write-Host ''
 Write-Host ("=== Done: {0} ok, {1} failed.  Artifacts in {2} ===" -f $ok, $fail, $outDir) -ForegroundColor Cyan
+

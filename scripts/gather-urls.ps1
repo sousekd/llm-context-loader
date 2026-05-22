@@ -25,11 +25,11 @@
 
 [CmdletBinding()]
 param(
-    [int]      $Count    = 15,
-    [string]   $OutFile,
-    [string[]] $Topics,
-    [int]      $PerTopic = 5,
-    [int]      $MaxPages = 5
+  [int]      $Count    = 15,
+  [string]   $OutFile,
+  [string[]] $Topics,
+  [int]      $PerTopic = 5,
+  [int]      $MaxPages = 5
 )
 
 # Misconfiguration (bad SearXNG URL, network down) should fail fast — unlike
@@ -39,16 +39,16 @@ $ErrorActionPreference = 'Stop'
 $searxBase = if ($env:SEARX_BASE) { $env:SEARX_BASE } else { 'http://localhost:8080' }
 
 if (-not $Topics -or $Topics.Count -eq 0) {
-    $Topics = @(
-        'typescript fastify tutorial',
-        'python decorators explained',
-        'rust ownership borrow checker',
-        'kubernetes ingress vs gateway api',
-        'lithium iron phosphate battery degradation',
-        'postgres index types explained',
-        'http3 quic protocol overview',
-        'docker buildkit multi-stage best practices'
-    )
+  $Topics = @(
+    'typescript fastify tutorial',
+    'python decorators explained',
+    'rust ownership borrow checker',
+    'kubernetes ingress vs gateway api',
+    'lithium iron phosphate battery degradation',
+    'postgres index types explained',
+    'http3 quic protocol overview',
+    'docker buildkit multi-stage best practices'
+  )
 }
 
 $collected = New-Object System.Collections.Generic.List[string]
@@ -57,53 +57,54 @@ $active    = [System.Collections.Generic.List[string]]::new()
 foreach ($topic in $Topics) { $active.Add($topic) | Out-Null }
 
 for ($page = 1; $page -le $MaxPages; $page++) {
+  if ($collected.Count -ge $Count) { break }
+  if ($active.Count    -eq 0)     { break }
+
+  $exhausted = New-Object System.Collections.Generic.List[string]
+  foreach ($topicQuery in $active) {
     if ($collected.Count -ge $Count) { break }
-    if ($active.Count    -eq 0)     { break }
 
-    $exhausted = New-Object System.Collections.Generic.List[string]
-    foreach ($topicQuery in $active) {
-        if ($collected.Count -ge $Count) { break }
-
-        Write-Host ("[searxng p{0}] {1}" -f $page, $topicQuery) -ForegroundColor DarkCyan
-        try {
-            $uri = "$searxBase/search?q=" + [uri]::EscapeDataString($topicQuery) + "&format=json&pageno=$page"
-            $response = Invoke-RestMethod -Uri $uri -TimeoutSec 20
-        } catch {
-            Write-Host ("  ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
-            $exhausted.Add($topicQuery) | Out-Null
-            continue
-        }
-
-        $hits  = @($response.results | Where-Object { $_.url -match '^https?://' })
-        $added = 0
-        foreach ($hit in $hits) {
-            if ($collected.Count -ge $Count) { break }
-            if ($added -ge $PerTopic)        { break }
-            if ($seen.Add($hit.url)) {
-                $collected.Add($hit.url) | Out-Null
-                $added++
-            }
-        }
-        Write-Host ("  + {0} (total {1}/{2})" -f $added, $collected.Count, $Count) -ForegroundColor DarkGray
-
-        # Drop topics that produced nothing new on this page; their later
-        # pages are very unlikely to help and just waste round-trips.
-        if ($added -eq 0) { $exhausted.Add($topicQuery) | Out-Null }
+    Write-Host ("[searxng p{0}] {1}" -f $page, $topicQuery) -ForegroundColor DarkCyan
+    try {
+      $uri = "$searxBase/search?q=" + [uri]::EscapeDataString($topicQuery) + "&format=json&pageno=$page"
+      $response = Invoke-RestMethod -Uri $uri -TimeoutSec 20
+    } catch {
+      Write-Host ("  ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
+      $exhausted.Add($topicQuery) | Out-Null
+      continue
     }
 
-    foreach ($topicQuery in $exhausted) { [void]$active.Remove($topicQuery) }
+    $hits  = @($response.results | Where-Object { $_.url -match '^https?://' })
+    $added = 0
+    foreach ($hit in $hits) {
+      if ($collected.Count -ge $Count) { break }
+      if ($added -ge $PerTopic)        { break }
+      if ($seen.Add($hit.url)) {
+        $collected.Add($hit.url) | Out-Null
+        $added++
+      }
+    }
+    Write-Host ("  + {0} (total {1}/{2})" -f $added, $collected.Count, $Count) -ForegroundColor DarkGray
+
+    # Drop topics that produced nothing new on this page; their later
+    # pages are very unlikely to help and just waste round-trips.
+    if ($added -eq 0) { $exhausted.Add($topicQuery) | Out-Null }
+  }
+
+  foreach ($topicQuery in $exhausted) { [void]$active.Remove($topicQuery) }
 }
 
 if ($collected.Count -lt $Count) {
-    Write-Host ("WARN: only collected {0}/{1} URLs (topics exhausted or MaxPages={2} reached)" -f `
-        $collected.Count, $Count, $MaxPages) -ForegroundColor Yellow
+  Write-Host ("WARN: only collected {0}/{1} URLs (topics exhausted or MaxPages={2} reached)" -f `
+    $collected.Count, $Count, $MaxPages) -ForegroundColor Yellow
 }
 
 if ($OutFile) {
-    $dir = Split-Path -Parent $OutFile
-    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    Set-Content -Path $OutFile -Value $collected -Encoding utf8
-    Write-Host ("Wrote {0} URLs to {1}" -f $collected.Count, $OutFile) -ForegroundColor Cyan
+  $dir = Split-Path -Parent $OutFile
+  if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+  Set-Content -Path $OutFile -Value $collected -Encoding utf8
+  Write-Host ("Wrote {0} URLs to {1}" -f $collected.Count, $OutFile) -ForegroundColor Cyan
 }
 
 $collected
+
