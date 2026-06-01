@@ -6,6 +6,7 @@ import { createTestLogger } from "../../../helpers/logger.js";
 import { makeStepContext } from "../utils.js";
 
 const ARTIFACT = "trusted-urls";
+const CHECKED_KEY = `${ARTIFACT}:checked-content`;
 
 function inventory(urls: ReadonlyArray<string>): Map<string, unknown> {
   return new Map<string, unknown>([[ARTIFACT, new Set(urls)]]);
@@ -38,7 +39,9 @@ describe("VerifyUrlsStep", () => {
 
     expect(result.status).toBe("ok");
     expect(result.diagnostics?.attributes).toMatchObject({ artifact: ARTIFACT, url_count: 2 });
-    expect(result.effects).toBeUndefined();
+    expect(result.effects?.artifacts).toEqual({
+      [CHECKED_KEY]: "Visit [docs](https://example.com/docs) and https://example.com/other"
+    });
   });
 
   it("reports hallucinations without rolling back in report mode", async () => {
@@ -51,9 +54,12 @@ describe("VerifyUrlsStep", () => {
       })
     );
 
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("degraded");
     expect(result.reason).toBe("hallucinated_urls");
-    expect(result.effects).toBeUndefined();
+    expect(result.effects?.body).toBeUndefined();
+    expect(result.effects?.artifacts).toEqual({
+      [CHECKED_KEY]: "[good](https://example.com/docs) [bad](https://example.com/hallucinated)"
+    });
     expect(result.diagnostics?.attributes).toMatchObject({ hallucinated_count: 1, reported_count: 1 });
     expect(result.diagnostics?.children).toEqual([
       { name: "hallucinated_url", attributes: { url: "https://example.com/hallucinated", occurrences: 1 } }
@@ -76,12 +82,13 @@ describe("VerifyUrlsStep", () => {
       })
     );
 
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("degraded");
     expect(result.reason).toBe("hallucinated_urls");
     expect(result.effects?.body).toEqual({
       content: "Original body with [good](https://example.com/good)",
       title: "Title"
     });
+    expect(result.effects?.artifacts).toBeUndefined();
     expect(result.diagnostics?.children).toEqual([
       { name: "hallucinated_url", attributes: { url: "https://example.com/bad", occurrences: 1 } }
     ]);
@@ -101,6 +108,31 @@ describe("VerifyUrlsStep", () => {
     );
 
     expect(result).toMatchObject({ status: "skipped", reason: "no_prior_version" });
+  });
+
+  it("skips when the body is unchanged since it was last checked", async () => {
+    const step = new VerifyUrlsStep({ artifact: ARTIFACT, onHallucination: "report" }, { logger: createTestLogger() });
+    const content = "[bad](https://example.com/hallucinated)";
+    const artifacts = inventory(["https://example.com/good"]);
+    artifacts.set(CHECKED_KEY, content);
+
+    const result = await step.run(makeStepContext({ body: { content }, artifacts }));
+
+    expect(result).toMatchObject({ status: "skipped", reason: "content_unchanged" });
+    expect(result.effects).toBeUndefined();
+  });
+
+  it("verifies when the body differs from the last checked content", async () => {
+    const step = new VerifyUrlsStep({ artifact: ARTIFACT, onHallucination: "report" }, { logger: createTestLogger() });
+    const artifacts = inventory(["https://example.com/good"]);
+    artifacts.set(CHECKED_KEY, "Original [good](https://example.com/good)");
+
+    const result = await step.run(
+      makeStepContext({ body: { content: "[bad](https://example.com/hallucinated)" }, artifacts })
+    );
+
+    expect(result.status).toBe("degraded");
+    expect(result.reason).toBe("hallucinated_urls");
   });
 
   it("ignores artifacts that are not Set instances", async () => {
@@ -131,7 +163,7 @@ describe("VerifyUrlsStep", () => {
       })
     );
 
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("degraded");
     expect(result.diagnostics?.attributes).toMatchObject({ hallucinated_count: 60, reported_count: 50 });
     expect(result.diagnostics?.children?.length).toBe(50);
   });
@@ -152,7 +184,7 @@ describe("VerifyUrlsStep", () => {
       })
     );
 
-    expect(result.status).toBe("failed");
+    expect(result.status).toBe("degraded");
     expect(result.diagnostics?.attributes).toMatchObject({ hallucinated_count: 2, reported_count: 0 });
     expect(result.diagnostics?.children).toEqual([]);
     expect(result.effects?.body).toBeDefined();

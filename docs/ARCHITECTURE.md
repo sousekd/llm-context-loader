@@ -104,9 +104,9 @@ Key pieces:
 - `PipelineStep` (`src/contracts/pipeline/step.ts`) is the executable step port: `run(ctx): Promise<StepResult>`.
 - `PipelineContext` (`src/contracts/pipeline/context.ts`) exposes request input, abort signal, prior outcomes, body versions, scalar signals, and artifacts.
 - `BodyStore` (`src/core/pipeline/body.ts`) owns immutable body versions. Steps read body state through the context but request mutations by returning effects.
-- `StepResult` carries `status: "ok" | "skipped" | "failed"`, optional `reason`, `effects`, and `diagnostics`. Diagnostics are observability-only: they surface in the persisted `StepReport` and in renderers, but are never visible to later steps.
+- `StepResult` carries `status: "ok" | "skipped" | "degraded" | "failed"`, optional `reason`, `effects`, and `diagnostics`. Diagnostics are observability-only: they surface in the persisted `StepReport` and in renderers, but are never visible to later steps.
 - `StepOutcome` (`src/contracts/pipeline/report.ts`) is the compact, semantic view later steps see via `PipelineContext.outcomes`; inter-step coordination uses `signals` and `artifacts`, not diagnostics. `StepReport` extends it with timing and a mirrored diagnostics payload.
-- `applyStepEffects` applies effects on `ok` or `failed` status (in body, signal, artifact order); `skipped` results never apply effects. A `failed` step may still carry effects, for example a quality gate rolling the body back to its previous version.
+- `applyStepEffects` applies effects on `ok` or `degraded` status (in body, signal, artifact order); `skipped` and `failed` results never apply effects. A `degraded` step may still carry effects, for example a quality gate rolling the body back to its previous version.
 - `PipelineOrchestrator` runs one compiled pipeline for one URL, applies per-step timeouts, acquires concurrency-group limiters, records reports, and returns detached signal/artifact snapshots.
 - `PipelineRunner` (`src/core/pipeline/runner.ts`) wraps the orchestrator and applies the pipeline's configured renderer, including a synthetic failure report for adapter-level per-URL failures.
 - `OutputRenderer` (`src/contracts/extensions/output-renderer.ts`) is the runtime rendering port.

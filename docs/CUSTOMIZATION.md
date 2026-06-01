@@ -233,7 +233,7 @@ config:
   artifact: trusted-urls
 ```
 
-Reads the current body, extracts and canonicalizes URLs (inline links, autolinks, and bare HTTP(S) URLs; ignores fenced and inline code, images, and reference definitions), and writes the resulting `Set<string>` to an artifact. Skips with `no_body` when there is no body. Place after `load-source` to capture the trusted source-URL inventory before any LLM stage runs.
+Reads the current body, extracts and canonicalizes URLs (inline links, autolinks, and bare HTTP(S) URLs; ignores fenced and inline code, images, and reference definitions), and writes the resulting `Set<string>` to an artifact. It also seeds a sibling marker artifact (`<artifact>:checked-content`) with the verbatim source body, so a later `verify-urls` step skips until a step actually changes the body. Skips with `no_body` when there is no body. Place after `load-source` to capture the trusted source-URL inventory before any LLM stage runs.
 
 Diagnostics: `artifact`, `url_count`.
 
@@ -250,10 +250,10 @@ Compares URLs in the current body against the inventory written by an earlier `c
 
 Modes (`onHallucination`):
 
-- `report` (default): on hallucinations the step returns `failed` with `reason: hallucinated_urls` and lists the offending URLs in its diagnostics; the body is left unchanged.
+- `report` (default): on hallucinations the step returns `degraded` with `reason: hallucinated_urls` and lists the offending URLs in its diagnostics; the body is left unchanged.
 - `rollback`: same diagnostics, but the body is also rolled back to the version that was the input to the gated step.
 
-In both modes a hallucination makes the pipeline rollup `degraded` (an earlier body still exists). The step skips with `no_body`, `no_inventory`, or `no_prior_version` (rollback only, when there is nothing to roll back to).
+In both modes a hallucination makes the pipeline rollup `degraded` (an earlier body still exists). An `ok` or `report` run advances the `<artifact>:checked-content` marker to the body it just checked, so the step skips with `content_unchanged` whenever the current body equals content already checked. A `rollback` run leaves the marker untouched, since it restores an unverified prior version. The step also skips with `no_body`, `no_inventory`, or `no_prior_version` (rollback only, when there is nothing to roll back to).
 
 `maxReportedUrls` caps the per-URL child list independently of the mode: omit it to report every hallucinated URL, `0` to report none (attributes only), or a positive `N` to report the top `N` worst offenders. The log line always reports the full hallucinated count regardless of the cap.
 

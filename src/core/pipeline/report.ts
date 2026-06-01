@@ -2,8 +2,8 @@
  * Finalizes pipeline reports from body versions and step reports.
  *
  * The report rollup is intentionally derived after all effects are applied: a
- * failed step with a body yields `degraded`, a failed run without a body yields
- * `failed`, and an all-ok run with a body yields `ok`.
+ * failed or degraded step with a body yields `degraded`, a failed run without a
+ * body yields `failed`, and an all-ok run with a body yields `ok`.
  */
 
 import type { BodyContent } from "../../contracts/pipeline/context.js";
@@ -23,8 +23,8 @@ export function finalizeReport(args: {
   const last = versions.at(-1);
   const initialChars = first?.content.length ?? 0;
   const finalChars = last?.content.length ?? 0;
-  const failedStep = args.steps.find(step => step.status === "failed");
-  const result = finalChars === 0 ? "failed" : failedStep ? "degraded" : "ok";
+  const degradedStep = args.steps.find(step => step.status === "failed" || step.status === "degraded");
+  const result = finalChars === 0 ? "failed" : degradedStep ? "degraded" : "ok";
   const ratio = initialChars > 0 && finalChars > 0 ? Number((finalChars / initialChars).toFixed(3)) : undefined;
 
   return {

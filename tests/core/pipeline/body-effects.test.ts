@@ -50,7 +50,7 @@ describe("applyStepEffects", () => {
     expect(state.artifacts.has("feature.payload")).toBe(false);
   });
 
-  it("applies body, signal, and artifact effects for failed results", () => {
+  it("applies body, signal, and artifact effects for degraded results", () => {
     const state = { body: new BodyStore(), signals: new Map(), artifacts: new Map() };
     state.body.append({ stepName: "fetch", content: "source", title: "Title" });
     state.signals.set("feature.enabled", true);
@@ -59,7 +59,7 @@ describe("applyStepEffects", () => {
     const summary = applyStepEffects(
       "rollback",
       {
-        status: "failed",
+        status: "degraded",
         reason: "hallucinated_urls",
         effects: {
           body: { content: "source", title: "Title" },
@@ -74,6 +74,32 @@ describe("applyStepEffects", () => {
     expect(state.body.versions().map(version => version.stepName)).toEqual(["fetch", "rollback"]);
     expect(state.signals.has("feature.enabled")).toBe(false);
     expect(state.artifacts.has("feature.payload")).toBe(false);
+  });
+
+  it("ignores effects on failed results", () => {
+    const state = { body: new BodyStore(), signals: new Map(), artifacts: new Map() };
+    state.body.append({ stepName: "fetch", content: "source", title: "Title" });
+    state.signals.set("feature.enabled", true);
+    state.artifacts.set("feature.payload", { value: 1 });
+
+    const summary = applyStepEffects(
+      "verify",
+      {
+        status: "failed",
+        reason: "hallucinated_urls",
+        effects: {
+          body: { content: "replaced", title: "Title" },
+          signals: { "feature.enabled": null },
+          artifacts: { "feature.payload": null }
+        }
+      },
+      state
+    );
+
+    expect(summary).toEqual({ wroteBody: false });
+    expect(state.body.versions().map(version => version.stepName)).toEqual(["fetch"]);
+    expect(state.signals.get("feature.enabled")).toBe(true);
+    expect(state.artifacts.get("feature.payload")).toEqual({ value: 1 });
   });
 
   it("ignores effects on skipped results", () => {

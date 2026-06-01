@@ -2,8 +2,9 @@
  * Applies step-requested effects to orchestrator-owned pipeline state.
  *
  * Effects are the only mutation channel available to steps. The canonical order
- * is body, then signals, then artifacts. Failed-step effects are intentional and
- * support quality gates such as body rollback while still degrading the report.
+ * is body, then signals, then artifacts. Effects apply on `ok` or `degraded`
+ * status only, so a quality gate can roll the body back while degrading the
+ * report; `skipped` and `failed` results never mutate state.
  */
 
 import type { ScalarValue } from "../../contracts/pipeline/context.js";
@@ -26,13 +27,13 @@ export interface AppliedEffectsSummary {
 /**
  * Applies step effects in the canonical body, signal, artifact order.
  *
- * Effects apply on `ok` or `failed` status; `skipped` results never apply
- * effects. Allowing effects on `failed` lets a step that detected a problem
- * report the failure and mutate state in one result. The pipeline rollup still
- * treats the step as failed.
+ * Effects apply on `ok` or `degraded` status; `skipped` and `failed` results
+ * never apply effects. Allowing effects on `degraded` lets a step that flagged a
+ * quality concern report the degradation and mutate state in one result. The
+ * pipeline rollup still treats the step as degraded.
  */
 export function applyStepEffects(stepName: string, result: StepResult, state: EffectState): AppliedEffectsSummary {
-  if (result.status === "skipped" || !result.effects) return { wroteBody: false };
+  if ((result.status !== "ok" && result.status !== "degraded") || !result.effects) return { wroteBody: false };
 
   if (result.effects.body) {
     state.body.append({ stepName, ...result.effects.body });

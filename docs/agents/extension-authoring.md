@@ -73,9 +73,9 @@ Implement `PipelineStep` (`src/contracts/pipeline/step.ts`): `run(ctx): Promise<
 
 Return shape (`StepResult`):
 
-- `status: "ok" | "skipped" | "failed"`.
+- `status: "ok" | "skipped" | "degraded" | "failed"`. Use `degraded` when the step completed its work but flagged a quality concern; use `failed` when the step could not complete.
 - `reason?`: short stable string (snake_case) — surfaces in reports and log lines.
-- `effects?`: requested mutations — `body`, `signals`, `artifacts`. Applied by the orchestrator in that order on `ok` or `failed` status; `skipped` results never apply effects. Pairing `failed` with effects is intentional and rare: use it when a step both detects a problem and needs to mutate state in the same result (for example a quality gate that rolls the body back to its previous version while still surfacing the run as degraded).
+- `effects?`: requested mutations — `body`, `signals`, `artifacts`. Applied by the orchestrator in that order on `ok` or `degraded` status; `skipped` and `failed` results never apply effects.
 - `diagnostics?`: `{ attributes?, children? }`. Observability-only. Surfaces in the persisted `StepReport` and the XML footer. Never visible to subsequent steps.
 
 If a later step needs data produced by an earlier one, the earlier step must emit it as a `signal` (scalar coordination) or `artifact` (typed payload). `diagnostics` are observability-only and are never visible to subsequent steps via `ctx.outcomes` — do not rely on them for cross-step decisions.

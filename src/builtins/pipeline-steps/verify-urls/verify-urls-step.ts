@@ -1,10 +1,12 @@
 /**
  * Verifies that transformed body URLs remain within a captured trusted inventory.
  *
- * The step uses the same canonicalization as capture-urls. In rollback mode it
- * returns `status: "failed"` with a body effect that restores the previous body
- * version, letting the pipeline surface a degraded run while preventing
- * hallucinated URLs from reaching the final body.
+ * Uses the same canonicalization as capture-urls. A sibling marker artifact
+ * (`<artifact>:checked-content`) records the body last checked: capture-urls
+ * seeds it, and ok/report runs advance it; rollback runs do not, since they
+ * restore an unverified prior version. The step skips `content_unchanged` when
+ * the current body equals the marker. On hallucinations it returns `degraded`:
+ * rollback mode restores the previous body version, report mode leaves it as-is.
  */
 
 import { collectCanonicalUrlCounts } from "../../../shared/markdown-urls.js";
@@ -37,6 +39,11 @@ export class VerifyUrlsStep implements PipelineStep {
     const inventory = readInventory(ctx, this.options.artifact);
     if (!inventory) return { status: "skipped", reason: "no_inventory" };
 
+    const markerKey = `${this.options.artifact}:checked-content`;
+    const checked = ctx.artifacts.get<unknown>(markerKey);
+    if (typeof checked === "string" && checked === body.content)
+      return { status: "skipped", reason: "content_unchanged" };
+
     const versions = ctx.body.versions();
     const rollbackTarget = this.options.onHallucination === "rollback" ? versions[versions.length - 2] : undefined;
     if (this.options.onHallucination === "rollback" && !rollbackTarget)
@@ -49,6 +56,7 @@ export class VerifyUrlsStep implements PipelineStep {
     if (hallucinated.length === 0)
       return {
         status: "ok",
+        effects: { artifacts: { [markerKey]: body.content } },
         diagnostics: { attributes: { artifact: this.options.artifact, url_count: counts.size } }
       };
 
@@ -72,7 +80,7 @@ export class VerifyUrlsStep implements PipelineStep {
         "Hallucinated URLs detected; rolling body back."
       );
       return {
-        status: "failed",
+        status: "degraded",
         reason: "hallucinated_urls",
         effects: { body: { content: rollbackTarget.content, title: rollbackTarget.title } },
         diagnostics
@@ -83,7 +91,12 @@ export class VerifyUrlsStep implements PipelineStep {
       { artifact: this.options.artifact, hallucinated: hallucinated.length, reported: reported.length },
       "Hallucinated URLs detected; reporting without rollback."
     );
-    return { status: "failed", reason: "hallucinated_urls", diagnostics };
+    return {
+      status: "degraded",
+      reason: "hallucinated_urls",
+      effects: { artifacts: { [markerKey]: body.content } },
+      diagnostics
+    };
   }
 }
 

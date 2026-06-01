@@ -14,16 +14,16 @@ import type { BodyContent, PipelineContext, ScalarValue } from "./context.js";
 import type { StepDiagnostics } from "./diagnostics.js";
 
 /** Enumerates the closed status set every step reports. */
-export type StepStatus = "ok" | "skipped" | "failed";
+export type StepStatus = "ok" | "skipped" | "degraded" | "failed";
 
 /**
  * Describes state changes requested by a step result.
  *
  * Effects on signals and artifacts use `null` to delete an existing key.
- * Effects are applied by the orchestrator on `ok` or `failed` status only;
- * `skipped` results never apply effects. A step is allowed to combine
- * `status: "failed"` with effects when it both detects a problem and wants
- * to mutate state (for example a quality gate rolling the body back).
+ * Effects are applied by the orchestrator on `ok` or `degraded` status only;
+ * `skipped` and `failed` results never apply effects. A step combines
+ * `status: "degraded"` with effects when it both flags a quality concern and
+ * wants to mutate state (for example a quality gate rolling the body back).
  */
 export interface StepEffects {
   readonly body?: BodyContent;
@@ -34,10 +34,10 @@ export interface StepEffects {
 /**
  * Describes the direct result returned by a step execution.
  *
- * `effects` apply only when `status` is `ok` or `failed`. Combining
- * `failed` with effects is intentional: it lets a step degrade the
+ * `effects` apply only when `status` is `ok` or `degraded`. Combining
+ * `degraded` with effects is intentional: it lets a step degrade the
  * pipeline rollup while still mutating state (body rollback, signal flip,
- * artifact write).
+ * artifact write). A `failed` result never mutates state.
  */
 export interface StepResult {
   readonly status: StepStatus;

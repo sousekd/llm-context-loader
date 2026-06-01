@@ -25,6 +25,15 @@ describe("CaptureUrlsStep", () => {
     expect([...stored].sort()).toEqual(["https://example.com/docs", "https://example.com/other"]);
   });
 
+  it("seeds the checked-content marker with the verbatim source body", async () => {
+    const step = new CaptureUrlsStep({ artifact: "trusted-urls" }, { logger: createTestLogger() });
+    const markdown = "See [docs](https://example.com/docs).";
+
+    const result = await step.run(makeStepContext({ body: { content: markdown } }));
+
+    expect(result.effects?.artifacts?.["trusted-urls:checked-content"]).toBe(markdown);
+  });
+
   it("writes an empty set when the body has no URLs", async () => {
     const step = new CaptureUrlsStep({ artifact: "trusted-urls" }, { logger: createTestLogger() });
 
@@ -41,6 +50,7 @@ describe("CaptureUrlsStep", () => {
     const result = await step.run(makeStepContext({ body: { content: "[link](https://example.com/x)" } }));
 
     expect(result.effects?.artifacts).toHaveProperty("source-urls");
+    expect(result.effects?.artifacts).toHaveProperty("source-urls:checked-content");
     expect(result.diagnostics?.attributes?.["artifact"]).toBe("source-urls");
   });
 });

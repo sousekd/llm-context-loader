@@ -236,9 +236,11 @@ export class PipelineOrchestrator {
     };
 
     if (result.status === "failed") {
-      const hasPriorBody = Boolean(state.body.current());
-      const message = hasPriorBody ? "Step degraded." : "Step failed.";
-      this.logger.warn(baseFields, message);
+      this.logger.warn(baseFields, "Step failed.");
+      return;
+    }
+    if (result.status === "degraded") {
+      this.logger.warn(baseFields, "Step degraded.");
       return;
     }
     this.logger.debug(baseFields, "Step finished.");

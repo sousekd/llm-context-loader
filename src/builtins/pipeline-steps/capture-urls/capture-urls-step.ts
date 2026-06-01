@@ -2,8 +2,10 @@
  * Captures canonical URLs from the current body into a pipeline artifact.
  *
  * The captured artifact is the trusted inventory used by verify-urls quality
- * gates after LLM transformations. Diagnostics expose only the artifact name and
- * URL count; later steps read the actual Set through the artifact bag.
+ * gates after LLM transformations. It also seeds a sibling marker artifact
+ * (`<artifact>:checked-content`) with the verbatim source body, so verify-urls
+ * skips until a later step actually changes the body. Diagnostics expose only
+ * the artifact name and URL count; later steps read the Set through the bag.
  */
 
 import { collectCanonicalUrls } from "../../../shared/markdown-urls.js";
@@ -29,7 +31,12 @@ export class CaptureUrlsStep implements PipelineStep {
     const urls = collectCanonicalUrls(body.content);
     return {
       status: "ok",
-      effects: { artifacts: { [this.config.artifact]: urls } },
+      effects: {
+        artifacts: {
+          [this.config.artifact]: urls,
+          [`${this.config.artifact}:checked-content`]: body.content
+        }
+      },
       diagnostics: { attributes: { artifact: this.config.artifact, url_count: urls.size } }
     };
   }

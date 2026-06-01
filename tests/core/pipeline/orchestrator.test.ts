@@ -115,13 +115,13 @@ describe("PipelineOrchestrator", () => {
     expect(result.report.steps[1]?.outputChars).toBeUndefined();
   });
 
-  it("applies body effects on failed results and rolls the run up as degraded", async () => {
+  it("applies body effects on degraded results and rolls the run up as degraded", async () => {
     const pipeline = makePipeline({
       steps: [
         withMeta(new FakeStep("fetch", { status: "ok", effects: { body: { content: "source", title: "Title" } } }), 5),
         withMeta(
           new FakeStep("verify", {
-            status: "failed",
+            status: "degraded",
             reason: "hallucinated_urls",
             effects: { body: { content: "source", title: "Title" } }
           }),
@@ -139,10 +139,38 @@ describe("PipelineOrchestrator", () => {
     expect(result.report.bodyProducedBy).toBe("fetch");
     expect(result.report.steps[1]).toMatchObject({
       name: "verify",
-      status: "failed",
+      status: "degraded",
       reason: "hallucinated_urls",
       outputChars: 6
     });
+  });
+
+  it("ignores effects on failed results and rolls the run up as degraded", async () => {
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(new FakeStep("fetch", { status: "ok", effects: { body: { content: "source", title: "Title" } } }), 5),
+        withMeta(
+          new FakeStep("verify", {
+            status: "failed",
+            reason: "hallucinated_urls",
+            effects: { body: { content: "rewritten", title: "Title" } }
+          }),
+          5
+        )
+      ]
+    });
+
+    const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(result.body).toEqual({ content: "source", title: "Title" });
+    expect(result.report.result).toBe("degraded");
+    expect(result.report.bodyChangedBy).toBe("fetch");
+    expect(result.report.steps[1]).toMatchObject({
+      name: "verify",
+      status: "failed",
+      reason: "hallucinated_urls"
+    });
+    expect(result.report.steps[1]?.outputChars).toBeUndefined();
   });
 
   it("copies child diagnostics from step results into reports", async () => {
