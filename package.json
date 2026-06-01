@@ -1,6 +1,6 @@
 {
   "name": "llm-context-loader",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Tiny LLM context loader: turns URLs into clean markdown for LLMs. Speaks Open WebUI's external web loader and Jina Reader-style GET /r/<url>; fetches via Firecrawl; optionally cleans via any OpenAI-compatible Chat Completions endpoint.",
   "license": "MIT",
