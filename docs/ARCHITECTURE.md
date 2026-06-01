@@ -1,175 +1,202 @@
 # Architecture
 
-LLM Context Loader is a small Fastify service with one application use case: load a URL and return markdown context. The code is organized so HTTP client contracts, fetch providers, LLM providers, and domain orchestration stay separate and individually testable.
+This document describes the internal architecture. The source code is the authority; this file is the map.
 
-The high-level request flow is in the [README](../README.md#request-flow). This document focuses on the internals: how the code is laid out, where the seams are, and the rules that keep them stable.
+The structure is engine-first: `src/engine/` is the programmatic runtime boundary, HTTP is the first adapter surface, and YAML is the default deployment configuration source.
 
-## Runtime detail
+## Runtime Flow
 
-The README diagram covers the happy path. The points worth knowing past that:
+Startup follows one path:
 
-- `POST /` runs `LoadContextUseCase.loadMany`, but each URL flows through the same `loadOne` pipeline independently. A failure on one URL does not cancel the rest of an Open WebUI batch unless `DIAGNOSTIC_FOOTER_ENABLED=false` and the failure is a fetch failure.
-- Fetches share a global `limiters.fetch` slot bounded by `FETCH_CONCURRENCY`.
-- The entire per-URL LLM workflow (clean + summarize today, more stages later) runs inside a single `limiters.llm` slot bounded by `LLM_CONCURRENCY`. This keeps single-stream local model servers usable with `LLM_CONCURRENCY=1` even when several URLs are being processed at once.
-- Truncation runs before the diagnostic footer is appended, so `TRUNCATE_TARGET_CHARS` caps the body only.
-- Fetch failure returns a diagnostic document when `DIAGNOSTIC_FOOTER_ENABLED=true`; otherwise it throws.
+```text
+src/main.ts
+  -> loadEnvConfig()
+  -> composeApp()
+  -> createEngine()
+  -> buildHttpApp()
+  -> Fastify listen
+```
 
-## Source layout
+At request time:
+
+```text
+HTTP adapter
+  -> PipelineHandle bound to one compiled pipeline
+  -> PipelineRunner
+  -> PipelineOrchestrator
+  -> configured OutputRenderer
+  -> adapter response shape
+```
+
+`src/main.ts` parses bootstrap environment, creates the root logger, loads app assembly, builds Fastify, and installs shutdown handling. `src/adapters/http/http-app.ts` owns Fastify setup, request correlation, shared error handling, the silent `/health` route, and adapter registration.
+
+`src/engine/create-engine.ts` is the programmatic engine boundary. It accepts `EngineConfig`, `EngineDescriptors`, `HostTools`, and a logger, then builds provider and output renderer registries, registers construction-time extension services, builds compiled pipelines internally, binds `PipelineHandle`s, and exposes `EngineRuntime`.
+
+`src/app/compose.ts` is the service assembly point. It loads `AppConfig` from YAML, builds the host-tools bag, calls `createEngine(...)`, and creates HTTP adapter plugins over engine-provided pipeline handles. The composed result type is `ComposedApp` with two top-level keys: `adapters` (the `http` adapter set) and `registries` (`sourceProviders`, `llmProviders`, `outputRenderers`, and pipeline discovery info).
+
+Additional adapter surfaces should start from `EngineRuntime` or host-level services above it, rather than adding a second provider/pipeline construction path.
+
+## Source Layout
 
 ```text
 src/
-  core/
-    ports/                 # FetchProvider and LlmProvider interfaces
-    cleanup/               # templates, length policy, quality gate, truncate, footer
-    use-cases/             # LoadContextUseCase and LlmStage
-    util/                  # errors, limiters, logger, URL helpers
-    types.ts               # shared document and metadata shapes
-  clients/
-    openwebui/             # POST / adapter
-    jina/                  # GET /r/<url> and GET /r?url=...
-    auth.ts                # shared inbound bearer auth
-    registry.ts            # CLIENTS parsing and CLIENT_REGISTRY
-  providers/
-    fetch/firecrawl/       # Firecrawl FetchProvider implementation and env schema
-    llm/openai-chat/       # OpenAI-compatible Chat Completions provider
-  config/config.ts         # core env schema
-  composition.ts           # concrete wiring
-  http.ts                  # Fastify app, error handler, GET /health
-  main.ts                  # process entrypoint
-templates/                 # Mustache prompts and footer
-tests/                     # mirrors src/ with dependency-injected stubs
-scripts/                   # local smoke helpers, not shipped in the Docker image
+  shared/                    framework-free support: errors, logging, request context, URLs, limiters, templates, diagnostic name validation
+  core/                      framework-free pipeline engine (orchestrator, runner, effects, body store); `core/pipeline/` mirrors `contracts/pipeline/`
+  contracts/                 framework-free contracts grouped by intent
+    pipeline/                pipeline ports and types: step, diagnostics, context, report, and handle definitions
+    extensions/              source provider, LLM provider, output renderer, registry, and resolved wrapper contracts
+    host/                    HostTools and ExtensionServices construction-time service contracts
+  engine/                    programmatic engine API, EngineConfig, EngineRuntime, createEngine, and engine-local builders
+  builtins/                  individual engine built-ins collected by descriptor bundles
+    source-providers/
+    llm-providers/
+    pipeline-steps/
+    output-renderers/
+  adapters/
+    http/                    Fastify host, HTTP adapter contracts, HTTP adapter builder, descriptor bundle, and HTTP built-ins
+  bundles/                   default engine descriptor bundle selected by app assembly
+  app/                       service assembly and host-tools/resource-loader builders
+  config/                    bootstrap env schema, AppConfig envelope, YAML loading, and YAML-to-AppConfig translation
+    yaml/                    YAML schema, file reading, environment substitution, and AppConfig translation
+  main.ts                    process entry point
+tests/                       mirrors src/ and enforces boundaries
+scripts/                     developer smoke helpers
 ```
 
-## Main boundaries
+The current built-ins are:
 
-### Core
+- HTTP adapters: `open-webui`, `jina`.
+- Source providers: `firecrawl`.
+- LLM providers: `openai-chat`.
+- Pipeline steps: `load-source`, `llm-pass`, `truncate`, `capture-urls`, `verify-urls`.
+- Output renderers: `debug-xml`, `passthrough`.
 
-`src/core/` is framework-free domain code. It must not import Fastify, HTTP route adapters, concrete providers, or `src/composition.ts`. The core owns orchestration, fallback behavior, truncation, footer data, quality checks, and URL validation.
+## Dependency Boundaries
 
-### Clients
+The import graph is enforced by [tests/architecture/import-boundaries.test.ts](../tests/architecture/import-boundaries.test.ts). It is an allowlist by layer.
 
-`src/clients/<name>/` maps an external contract to the use case. Current clients are:
+- `src/shared/` imports only shared code or external packages.
+- `src/core/` imports only core, contracts, shared, or external packages.
+- `src/contracts/` imports contracts, shared, or external packages. It stays Fastify-free.
+- `src/engine/` imports only engine-local code, core, contracts, shared code, or external packages. It must not import YAML, HTTP, built-ins, bundles, Fastify, `RawYamlConfig`, `src/app/`, or `main.ts`.
+- `src/adapters/http/` owns Fastify integration, HTTP adapter contracts, HTTP adapter construction, the HTTP descriptor bundle, and HTTP built-ins. Fastify imports are allowed only in this layer.
+- `src/adapters/http/builtins/<name>/` may import its own files, the shared adapter auth helper, HTTP adapter contracts, contracts, shared code, or external packages.
+- `src/builtins/source-providers/<impl>/` and `src/builtins/llm-providers/<impl>/` may import their own files, contracts, shared code, or external packages.
+- `src/builtins/pipeline-steps/<type>/` may import their own files, contracts, shared code, or external packages.
+- `src/builtins/output-renderers/<type>/` may import their own files, contracts, shared code, or external packages.
+- `src/bundles/` collects engine built-in descriptors. It may import concrete engine built-ins, contracts, and shared helpers, but not HTTP adapter descriptors.
+- `src/app/` is the service aggregation point. It may import descriptor bundles, HTTP adapter APIs, config schemas, engine APIs, contracts, and shared helpers.
+- `src/config/` imports config-local code, engine config types, shared code, or external packages.
+- `src/main.ts` stays above app and HTTP app assembly. It does not import concrete built-ins or core directly.
 
-- `openwebui`: `POST /` with `{ "urls": [...] }`, returning Open WebUI document rows.
-- `jina`: `GET /r/<url>` and `GET /r?url=<url>`, returning markdown.
+Descriptor bundles are the only files that aggregate multiple concrete built-in components. HTTP host and construction files do not import HTTP built-ins directly; [src/adapters/http/descriptor-bundle.ts](../src/adapters/http/descriptor-bundle.ts) is the HTTP built-in aggregation point.
 
-The `CLIENTS` env variable chooses which client plugins are registered. Empty `CLIENTS` leaves only `/health`. Unknown names abort startup.
+When adding a top-level source layer, a new adapter surface, or a new category of built-in, update the architecture test in the same change. Unclassified source files should fail the architecture test rather than silently floating outside the graph.
 
-### Providers
+One important boundary is explicit in the architecture test: `src/core/` must not import `UpstreamError` or own provider-failure classification. Provider-specific failures are classified by steps that know provider contracts.
 
-Provider interfaces live in `src/core/ports/`. Concrete implementations live under `src/providers/<class>/<impl>/` and own their provider-specific env parsing through a `parseXxxEnv(env)` Zod schema in `*-env.ts`. This keeps provider keys next to their implementation; unrelated deployments never need to supply unrelated keys.
+## Core Pipeline
 
-Current implementations:
+`src/core/` is the framework-free runtime engine. It does not know about Firecrawl, OpenAI, Open WebUI, Jina, or provider categories.
 
-- Fetch: `FirecrawlFetchProvider`, configured by `FIRECRAWL_*` keys.
-- LLM: `OpenAiChatLlmProvider`, configured by shared `LLM_*` keys plus an empty provider-local schema for consistency.
+Key pieces:
 
-The composition root is the only place that constructs providers.
+- `PipelineStep` (`src/contracts/pipeline/step.ts`) is the executable step port: `run(ctx): Promise<StepResult>`.
+- `PipelineContext` (`src/contracts/pipeline/context.ts`) exposes request input, abort signal, prior outcomes, body versions, scalar signals, and artifacts.
+- `BodyStore` (`src/core/pipeline/body.ts`) owns immutable body versions. Steps read body state through the context but request mutations by returning effects.
+- `StepResult` carries `status: "ok" | "skipped" | "failed"`, optional `reason`, `effects`, and `diagnostics`. Diagnostics are observability-only: they surface in the persisted `StepReport` and in renderers, but are never visible to later steps.
+- `StepOutcome` (`src/contracts/pipeline/report.ts`) is the compact, semantic view later steps see via `PipelineContext.outcomes`; inter-step coordination uses `signals` and `artifacts`, not diagnostics. `StepReport` extends it with timing and a mirrored diagnostics payload.
+- `applyStepEffects` applies effects on `ok` or `failed` status (in body, signal, artifact order); `skipped` results never apply effects. A `failed` step may still carry effects, for example a quality gate rolling the body back to its previous version.
+- `PipelineOrchestrator` runs one compiled pipeline for one URL, applies per-step timeouts, acquires concurrency-group limiters, records reports, and returns detached signal/artifact snapshots.
+- `PipelineRunner` (`src/core/pipeline/runner.ts`) wraps the orchestrator and applies the pipeline's configured renderer, including a synthetic failure report for adapter-level per-URL failures.
+- `OutputRenderer` (`src/contracts/extensions/output-renderer.ts`) is the runtime rendering port.
 
-### Composition root
+`ScalarValue` (signals, inter-step coordination) and `DiagnosticValue` (report attributes, observability) are structurally identical aliases kept distinct so the two channels can diverge later.
 
-`src/composition.ts` wires config, limiters, templates, concrete providers, LLM stages, the use case, and selected client plugins. Provider selection switches are intentionally small because there is one implementation per provider type today. If a provider slot gains several implementations, a registry map similar to `CLIENT_REGISTRY` is the natural next step.
+Concurrency groups are configured per pipeline. Adjacent steps with the same `concurrencyGroup` share one limiter acquisition. If another step is inserted between them, locking behavior changes because the adjacent group is split. `timeoutSeconds` applies to both limiter waiting and step execution; limiter waiting for an adjacent group uses the longest timeout in that group.
 
-## LLM stages
+## Contracts And App Assembly
 
-Clean and summarize are configured instances of the same `LlmStage` class — not subclasses. A stage does this work in order:
+The repository uses a descriptor pattern for built-in implementation types. Each descriptor has:
 
-1. Check whether the stage is enabled and the compacted input length fits stage and context-window limits.
-2. Render system and user templates with `{ url, title, content }`.
-3. Call the LLM provider with Chat Completions messages using `system` and `user` roles only.
-4. Run the deterministic quality gate.
-5. Return either accepted output or a structured rejection footer.
+- `type`: the YAML type string.
+- `parseConfig(raw)`: implementation-local config parsing.
+- `create(args)`: factory for a configured runtime instance.
 
-Stage failures do not throw out of the stage. They return status data so the use case can keep the previous content.
+The descriptor contracts live in `src/contracts/`. Runtime ports for provider categories and output renderers live under `src/contracts/extensions/`; pipeline concepts (steps, handles, contexts, results) live under `src/contracts/pipeline/`; host construction services live under `src/contracts/host/`. `src/core/pipeline/` contains only the framework-free runtime implementation that consumes those pipeline ports.
 
-If a future stage diverges structurally (different inputs, multiple calls, tool use), create a sibling class rather than subclassing `LlmStage`. Sibling classes beat inheritance trees.
+Runtime instance contracts (`SourceProvider`, `LlmProvider`, `OutputRenderer`, `HttpAdapter`, `PipelineStep`) are behavior-only — they do not carry `name` or `type`. Engine construction wraps provider and output renderer instances in small `Resolved*` values (`src/contracts/extensions/resolved-extension.ts`) that pair the bare instance with its configured identity (`name`, `type`). HTTP adapter construction still wraps adapters the same way via `src/adapters/http/resolved-adapter.ts`. Registries and `ComposedApp` enumerate these wrappers; runners reach the bare implementation via `.provider` / `.adapter` / `.renderer`.
 
-## Fallback model
+Descriptor bundles are the only places that collect concrete built-in descriptors. The default engine bundle lives in `src/bundles/default-engine-descriptors.ts`; the hosted HTTP adapter bundle lives in `src/adapters/http/descriptor-bundle.ts`. There is no dynamic loading from disk.
 
-The pipeline keeps the best available content as it advances:
+The engine consumes caller-provided descriptor records. It never selects the default bundle, reads YAML, reads templates by itself, or chooses host dependencies such as `fetch`.
 
-- Initial content is Firecrawl markdown.
-- Accepted clean output replaces source markdown and sets `returned="clean"`.
-- Accepted summarize output replaces current content and sets `returned="summary"`.
-- Rejected, skipped, failed, or timed-out stages keep the previous content.
-- Truncation, when applied, sets `returned="truncated"`.
-- Fetch failure returns a diagnostic document when `DIAGNOSTIC_FOOTER_ENABLED=true`, otherwise it throws.
+`ExtensionServices` is a typed construction-time service bag. The engine registers named provider and output renderer registries, and step factories resolve the registries they need by key. HTTP adapters are terminal Fastify route plugins and are not registered as extension services; app assembly gives each adapter a `PipelineHandle` resolved from `EngineRuntime`.
 
-The diagnostic footer is appended after truncation.
+## Host Capabilities
 
-## Quality gate
+The host exposes three distinct capability surfaces to extensions and core code:
 
-`src/core/cleanup/quality-gate.ts` is the source of truth. `assessQuality(source, output, { minRatio, checkUrls })` rejects stage output when:
+| Concept                                                          | Location                  | Use for                                                                                                                                              |
+| ---------------------------------------------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/shared/*`                                                   | direct import             | **Stateless utilities.** Pure functions, framework-free helpers. Examples: `errors`, `urls`, `limiters`, `template-renderer`, `xml` name validation. |
+| `HostTools` (`src/contracts/host/host-tools.ts`)                 | `deps.tools.require(key)` | **Stateful host singletons.** Resources, `httpFetch`, future clock/cache/metrics/persistence. Configured once by the host.                           |
+| `ExtensionServices` (`src/contracts/host/extension-services.ts`) | `services.require(key)`   | **Named registries of user-configured instances.** Source providers, LLM providers, output renderers — operator declares N, picks by name.           |
 
-- output is empty (reason `empty`),
-- output is not smaller than the source (reason `ineffective`),
-- output/source compacted-char ratio is below the stage minimum (reason `too_small_ratio`),
-- `checkUrls=true` and output introduces HTTP(S) URLs absent from the source (reason `unexpected_urls`).
+Decision rule for adding a new "thing":
 
-Clean defaults to URL checking on; summarize defaults to URL checking off because summaries may intentionally omit or reshape link-heavy detail.
+1. Stateless and host-agnostic? → `src/shared/`.
+2. Stateful, configured by host, exactly one (or wants a testable seam)? → `HostTools`.
+3. Operator declares N instances in YAML and picks one by name? → `ExtensionServices`.
 
-## Configuration ownership
+All extension-author `*CreateDeps` (`PipelineStepCreateDeps`, `SourceProviderCreateDeps`, `LlmProviderCreateDeps`, `OutputRendererCreateDeps`, and HTTP-layer `HttpAdapterCreateDeps`) carry `{ logger, tools }`. Adding a new tool key never widens any descriptor contract.
 
-Core config lives in `src/config/config.ts`. Provider-specific config lives next to the provider, such as `src/providers/fetch/firecrawl/firecrawl-env.ts`.
+## Configuration Model
 
-When adding a core config key, update these files together:
+Bootstrap environment is intentionally small and parsed by `src/config/env-config.ts`: `CONFIG_FILE`, `HOST`, `PORT`, `LOG_LEVEL`, and `LOG_PRETTY`.
 
-- [src/config/config.ts](../src/config/config.ts)
-- [.env.example](../.env.example)
-- [README.md](../README.md)
-- [compose.yaml](../compose.yaml)
-- [compose.deploy.yaml](../compose.deploy.yaml)
+The YAML document is translated to `AppConfig` before runtime construction:
 
-When adding a provider-specific key, update the provider env schema and the same operator-facing docs/config examples.
+1. `src/config/yaml/yaml-config.ts` validates the coarse YAML shape: `httpAdapters`, `outputRenderers`, `sourceProviders`, `llmProviders`, and `pipelines`.
+2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata.
+3. Each built-in descriptor parses its own `config` block with a local schema during engine or adapter construction.
 
-## Security notes
+YAML environment substitution happens before schema validation. See [CONFIGURATION.md](CONFIGURATION.md) for default operation and [CUSTOMIZATION.md](CUSTOMIZATION.md) for YAML structure.
 
-- Inbound bearer auth is centralized in `src/clients/auth.ts` and uses constant-time comparison.
-- `/health` is always unauthenticated.
-- URL validation accepts only `http:` and `https:`.
-- Provider responses and template inputs are treated as untrusted external content.
-- Mustache escaping is disabled for markdown output, so XML footer attributes are escaped in `src/core/cleanup/debug-footer.ts` before rendering.
-- Upstream provider error codes are slugified and bounded before they reach logs or footer attributes.
-- `CLIENTS` is parsed against an in-process registry. There is no dynamic plugin loading from disk.
+`EngineConfig` excludes adapter declarations and schema metadata. `AppConfig` is the app-level envelope that pairs `engineConfig` with adapter configuration such as `adapters.http`.
 
-Source comments preserve these search tokens around security-sensitive code paths: `untrusted external content`, `security boundary`, `XML attribute escaping`, `constant-time`, and `sanitizeUpstreamCode`.
+## HTTP Layer
 
-## Extending the service
+`src/adapters/http/http-app.ts` builds one Fastify app from configured adapter plugins. It disables Fastify request autologging, creates request IDs from `x-request-id` or a UUID, enters request context in `onRequest`, logs one non-health request line in `onResponse`, and handles shared errors.
 
-Only extend current scope after updating [ROADMAP.md](ROADMAP.md) and the relevant operator docs.
+HTTP adapters own their external contract:
 
-### Add a fetch provider
+- `open-webui` registers `POST /` by default, validates `{ urls: [...] }`, applies optional bearer auth, runs the pipeline once per URL, and returns Open WebUI document rows shaped as `{ page_content, metadata }`. Per-URL validation or rendered pipeline failures are returned as diagnostic rows inside the batch.
+- `jina` registers `GET /r` and `GET /r/*` by default, accepts path or query URL forms, applies optional bearer auth, and returns `text/markdown`.
 
-1. Create `src/providers/fetch/<impl>/` implementing `FetchProvider`.
-2. Add a provider-local env parser such as `parseXxxEnv(env)`.
-3. Wire selection in `src/composition.ts` and widen the allowed `FETCH_PROVIDER` values.
-4. Update env examples, README config, Compose config, and provider tests.
+`/health` is registered by the HTTP host and is always unauthenticated.
 
-### Add an LLM provider
+## Error And Output Model
 
-Use the same provider shape under `src/providers/llm/<impl>/`, implementing `LlmProvider`. Keep the provider contract compatible with basic Chat Completions unless the architecture is intentionally changed.
+Shared intentional errors live in `src/shared/errors.ts`:
 
-### Add a stage
+- `ClientError` represents caller mistakes and is surfaced as 4xx by the HTTP error handler.
+- `ConfigurationError` represents startup or app-assembly misconfiguration.
+- `UpstreamError` represents external provider failures and sanitizes upstream codes at construction.
+- `InternalError` represents bugs or unexpected runtime failures.
 
-If the stage has the same shape as clean and summarize, create another `LlmStage` instance with its own config block and templates. If it has different inputs, multiple calls, or tool use, create a sibling class rather than subclassing `LlmStage`.
+Provider implementations throw `UpstreamError` for HTTP, parse, empty-response, and network failures, and let abort errors propagate. `load-source` and `llm-pass` classify `UpstreamError` and abort errors into step `reason` values. Other thrown errors are treated as unexpected by the orchestrator.
 
-Stage env keys follow this convention:
+The `debug-xml` output renderer appends an XML diagnostic footer generated by `src/builtins/output-renderers/debug-xml/footer-serializer.ts`; if no body was produced, it returns the footer by itself. The `passthrough` output renderer returns body content without a footer, or the pipeline error message when a failed run produced no body. `outputRenderer` selection is per pipeline in YAML.
 
-```text
-<STAGE>_ENABLED
-<STAGE>_MIN_INPUT_CHARS
-<STAGE>_MAX_INPUT_CHARS
-<STAGE>_OUTPUT_RATIO
-<STAGE>_TIMEOUT_SECONDS
-<STAGE>_QUALITY_MIN_RATIO
-<STAGE>_CHECK_URLS
-```
+## Logging And Request Context
 
-### Add a client
+Logging uses pino. Identity fields are bound at construction by the engine and adapter builders with `logger.child(...)`; runtime components use the logger they were given. Request correlation fields are stored in AsyncLocalStorage by `src/shared/request-context.ts` and merged into log lines by the pino mixin in `src/shared/logger.ts`.
 
-1. Add `src/clients/<name>/route.ts` (or another client entrypoint type if the registry is extended).
-2. Add an entry to `CLIENT_REGISTRY`.
-3. Reuse `enforceBearerAuth` for HTTP routes.
-4. Reuse `LoadContextUseCase`; do not duplicate orchestration.
-5. Let operators opt in through `CLIENTS`.
+## Security Boundaries
+
+Security-relevant paths are intentionally marked with searchable tokens. Current examples include URL validation in `src/shared/urls.ts`, constant-time bearer-token comparison in `src/adapters/http/builtins/auth.ts`, upstream-code sanitization in `src/shared/errors.ts`, and XML attribute escaping in `src/builtins/output-renderers/debug-xml/footer-serializer.ts`.
+
+## Extension Surface
+
+The code has internal extension-shaped contracts because YAML app assembly needs them. Each built-in category (source providers, LLM providers, output renderers, pipeline steps, HTTP adapters) sits behind a descriptor contract in its own folder, which keeps adding a built-in inside this repository a localized change. See [CUSTOMIZATION.md](CUSTOMIZATION.md) for the configurable surface those built-ins expose.

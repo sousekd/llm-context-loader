@@ -1,17 +1,21 @@
-import pLimit from "p-limit";
-import pino from "pino";
-import type { Limiters } from "../../src/core/util/limiters.js";
-import type { Logger } from "../../src/core/util/logger.js";
+/** Provides logger fixtures for tests. */
+import type { Logger } from "../../src/shared/logger.js";
 
-// A pino logger pinned to the `silent` level — quiet by default but still
-// the real pino API so use cases that call `.child(...)` keep working.
-export function silentLogger(): Logger {
-  return pino({ level: "silent" }) as unknown as Logger;
+export interface CapturedLog {
+  readonly level: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
+  readonly value: unknown;
+  readonly message?: string;
 }
 
-// Identity limiters: every concurrency cap collapses to 1 (i.e. serial).
-// Tests that care about concurrency override individual slots; everything
-// else just needs the call shape.
-export function silentLimiters(): Limiters {
-  return { fetch: pLimit(1), llm: pLimit(1) };
+export function createTestLogger(logs: CapturedLog[] = []): Logger {
+  const logger = {
+    child: () => logger,
+    trace: (value: unknown, message?: string) => logs.push({ level: "trace", value, message }),
+    debug: (value: unknown, message?: string) => logs.push({ level: "debug", value, message }),
+    info: (value: unknown, message?: string) => logs.push({ level: "info", value, message }),
+    warn: (value: unknown, message?: string) => logs.push({ level: "warn", value, message }),
+    error: (value: unknown, message?: string) => logs.push({ level: "error", value, message }),
+    fatal: (value: unknown, message?: string) => logs.push({ level: "fatal", value, message })
+  };
+  return logger as unknown as Logger;
 }

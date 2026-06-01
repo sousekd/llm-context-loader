@@ -1,12 +1,16 @@
-﻿node_modules/
+﻿# Dependencies and build output
+node_modules/
 dist/
 coverage/
 *.tsbuildinfo
 
+# Local environment files. Keep .env.example tracked.
 .env
 .env.local
 .env.*.local
+!.env.example
 
+# Logs and OS noise
 *.log
 .DS_Store
 

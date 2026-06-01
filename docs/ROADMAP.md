@@ -16,6 +16,7 @@ Implemented today:
 - Firecrawl fetch provider using `/v2/scrape` with markdown output.
 - OpenAI-compatible Chat Completions LLM provider.
 - Optional clean stage, optional summarize stage, final truncation, and XML diagnostic footer.
+- YAML-driven configuration for pipelines, providers, output renderers, and HTTP adapters.
 - Docker image published by CI to GHCR.
 
 Current provider implementations are intentionally few. The interfaces exist so replacements can be added without rewriting the use case.
@@ -25,7 +26,7 @@ Current provider implementations are intentionally few. The interfaces exist so 
 Improving what already exists before adding new surface area.
 
 - **URL hallucination repair.** The current quality gate already rejects stage output that introduces URLs absent from the source. Replace that all-or-nothing check with a deterministic repair pass.
-- **Diagnostics footer cleanup.** Consolidate the `<context_loader_info ... />` payload for consistency and readability.
+- **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
 - **Better defaults and prompts.** Iterate on clean/summarize system prompts and the default length budgets (`CLEAN_*`, `SUMMARIZE_*`, `TRUNCATE_TARGET_CHARS`).
 
 ## Short term
@@ -36,26 +37,29 @@ Near-term additions once the current refinement pass settles.
 - **MCP server for existing functionality.** Existing URL-to-context flow only.
 - **In-memory telemetry and simple UI.** Opt-in, in-memory statistics and recent request data for easier debugging.
 
+These should build over `EngineRuntime` or host-level services. They should not reread YAML to infer runtime state and should not create a parallel provider/pipeline construction path.
+
 ## Mid term
 
 Larger pieces that expand what the service can do without changing the core philosophy.
 
 - **Playwright fetch provider** to remove the hard dependency on a running Firecrawl instance, followed by:
-    - A fallback chain across fetch providers, optionally including cloud services such as Jina for those who want them rather than failing.
+  - A fallback chain across fetch providers, optionally including cloud services such as Jina for those who want them rather than failing.
 - **MCP server client, expanded modes**, delivered in stages:
-    1. Add explicit modes: "give me an overview + index of this URL", "extract specific information from this URL".
-    2. Smart staged response: return short pages in full; for long pages return overview + index and prompt the caller to ask for specific sections.
-    3. Cache fetched pages to support the staged flow without repeated upstream calls.
-- **Configurable fetch pipelines** via a YAML config: ordered steps of typed stages (fetch, clean, summarize, extract, …), per-step run conditions, pre- and post-checks, support for different models or providers. Make the existing hard-coded pipeline declarative & customizable.
-- **Persistent stage telemetry.** Optional store for per-stage statistics and request data after the pipeline model is clear.
+  1. Add explicit modes: "give me an overview + index of this URL", "extract specific information from this URL".
+  2. Smart staged response: return short pages in full; for long pages return overview + index and prompt the caller to ask for specific sections.
+  3. Cache fetched pages to support the staged flow without repeated upstream calls.
+- **Persistent stage telemetry.** Optional store for per-stage statistics and request data.
+
+Persistence should attach through typed host services, observers, or explicit app-level orchestration. Core pipeline code should not grow direct database writes.
 
 ## Long term
 
 Directions worth pursuing for broader usability.
 
 - **Non-HTML content handling:**
-    - URLs pointing at documents (PDF, Office) handled via external tools such as Docling.
-    - Image content surfaced via transcription/OCR.
+  - URLs pointing at documents (PDF, Office) handled via external tools such as Docling.
+  - Image content surfaced via transcription/OCR.
 
 ## Speculative / far future
 

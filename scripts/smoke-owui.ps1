@@ -23,10 +23,10 @@
 
 [CmdletBinding(DefaultParameterSetName = 'File')]
 param(
-    [Parameter(ParameterSetName = 'File',   Mandatory)] [string]   $UrlFile,
+    [Parameter(ParameterSetName = 'File', Mandatory)] [string]   $UrlFile,
     [Parameter(ParameterSetName = 'Inline', Mandatory)] [string[]] $Urls,
-    [int]    $BatchSize        = 20,
-    [int]    $Concurrency      = 5,
+    [int]    $BatchSize = 20,
+    [int]    $Concurrency = 5,
     [int]    $HealthTimeoutSec = 5,
     [switch] $SkipHealthCheck
 )
@@ -35,7 +35,8 @@ param(
 
 if ($PSCmdlet.ParameterSetName -eq 'File') {
     $Urls = Read-UrlFile -Path $UrlFile
-} else {
+}
+else {
     $Urls = ConvertTo-UrlArray -Urls $Urls
 }
 
@@ -44,9 +45,10 @@ if (-not $Urls -or $Urls.Count -eq 0) {
     exit 1
 }
 
-$defaults    = Get-LoaderDefaults
-$loaderBase  = $defaults.LoaderBase
+$defaults = Get-LoaderDefaults
+$loaderBase = $defaults.LoaderBase
 $authHeaders = Get-BearerHeaders -ApiKey $defaults.ApiKey
+$sharedLib = Join-Path $PSScriptRoot 'shared-lib.ps1'
 
 if (-not $SkipHealthCheck) {
     if (-not (Wait-LoaderHealth -LoaderBase $loaderBase -TimeoutSec $HealthTimeoutSec)) {
@@ -59,23 +61,23 @@ if (-not $SkipHealthCheck) {
 $batches = Split-IntoBatches -Items $Urls -BatchSize $BatchSize
 
 Write-Host ("=== POST {0}/  urls={1}  batchSize={2}  batches={3}  concurrency={4} ===" -f `
-    $loaderBase, $Urls.Count, $BatchSize, $batches.Count, $Concurrency) -ForegroundColor Cyan
+        $loaderBase, $Urls.Count, $BatchSize, $batches.Count, $Concurrency) -ForegroundColor Cyan
 $swAll = [System.Diagnostics.Stopwatch]::StartNew()
 
-# Note: functions dot-sourced into the parent runspace are not visible inside
-# ForEach-Object -Parallel, so the footer line extractor is inlined below.
 $results = $batches | ForEach-Object -ThrottleLimit $Concurrency -Parallel {
-    $batch   = $_
-    $base    = $using:loaderBase
+    $batch = $_
+    $base = $using:loaderBase
     $headers = $using:authHeaders
+    . $using:sharedLib
 
-    $body         = @{ urls = @($batch) } | ConvertTo-Json -Compress
-    $sw           = [System.Diagnostics.Stopwatch]::StartNew()
-    $documents    = $null
+    $body = @{ urls = @($batch) } | ConvertTo-Json -Compress
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $documents = $null
     $errorMessage = ''
     try {
         $documents = Invoke-RestMethod -Method POST -Uri "$base/" -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 600
-    } catch {
+    }
+    catch {
         $errorMessage = $_.Exception.Message
     }
     $sw.Stop()
@@ -85,10 +87,11 @@ $results = $batches | ForEach-Object -ThrottleLimit $Concurrency -Parallel {
         foreach ($u in $batch) {
             [pscustomobject]@{ url = $u; ok = $false; len = 0; ms = $batchMs; footer = ''; error = $errorMessage }
         }
-    } else {
+    }
+    else {
         for ($i = 0; $i -lt $documents.Count; $i++) {
             $content = [string]$documents[$i].page_content
-            $footer  = if ($content) { ($content -split "`n" | Where-Object { $_ -match '<context_loader_info' } | Select-Object -Last 1) } else { '' }
+            $footer = Get-LoaderFooterLine -Content $content
             [pscustomobject]@{
                 url    = $batch[$i]
                 ok     = $true

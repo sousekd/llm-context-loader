@@ -25,7 +25,7 @@
 
 [CmdletBinding()]
 param(
-    [int]      $Count    = 15,
+    [int]      $Count = 15,
     [string]   $OutFile,
     [string[]] $Topics,
     [int]      $PerTopic = 5,
@@ -52,13 +52,13 @@ if (-not $Topics -or $Topics.Count -eq 0) {
 }
 
 $collected = New-Object System.Collections.Generic.List[string]
-$seen      = New-Object System.Collections.Generic.HashSet[string]
-$active    = [System.Collections.Generic.List[string]]::new()
+$seen = New-Object System.Collections.Generic.HashSet[string]
+$active = [System.Collections.Generic.List[string]]::new()
 foreach ($topic in $Topics) { $active.Add($topic) | Out-Null }
 
 for ($page = 1; $page -le $MaxPages; $page++) {
     if ($collected.Count -ge $Count) { break }
-    if ($active.Count    -eq 0)     { break }
+    if ($active.Count -eq 0) { break }
 
     $exhausted = New-Object System.Collections.Generic.List[string]
     foreach ($topicQuery in $active) {
@@ -68,17 +68,18 @@ for ($page = 1; $page -le $MaxPages; $page++) {
         try {
             $uri = "$searxBase/search?q=" + [uri]::EscapeDataString($topicQuery) + "&format=json&pageno=$page"
             $response = Invoke-RestMethod -Uri $uri -TimeoutSec 20
-        } catch {
+        }
+        catch {
             Write-Host ("  ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
             $exhausted.Add($topicQuery) | Out-Null
             continue
         }
 
-        $hits  = @($response.results | Where-Object { $_.url -match '^https?://' })
+        $hits = @($response.results | Where-Object { $_.url -match '^https?://' })
         $added = 0
         foreach ($hit in $hits) {
             if ($collected.Count -ge $Count) { break }
-            if ($added -ge $PerTopic)        { break }
+            if ($added -ge $PerTopic) { break }
             if ($seen.Add($hit.url)) {
                 $collected.Add($hit.url) | Out-Null
                 $added++
@@ -96,7 +97,7 @@ for ($page = 1; $page -le $MaxPages; $page++) {
 
 if ($collected.Count -lt $Count) {
     Write-Host ("WARN: only collected {0}/{1} URLs (topics exhausted or MaxPages={2} reached)" -f `
-        $collected.Count, $Count, $MaxPages) -ForegroundColor Yellow
+            $collected.Count, $Count, $MaxPages) -ForegroundColor Yellow
 }
 
 if ($OutFile) {
