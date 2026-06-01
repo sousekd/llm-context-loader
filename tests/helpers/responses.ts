@@ -1,10 +1,8 @@
-// Shared `Response` factory for provider tests that pass a fake `fetch`
-// implementation. Defaults to a 200 application/json response; init fields
-// merge on top so individual tests can override status, headers, etc.
+/** Provides fetch response fixtures for provider tests. */
 export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(init.headers as Record<string, string> | undefined) },
     ...init
   });
 }

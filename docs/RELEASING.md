@@ -58,13 +58,13 @@ While the project is in `0.x.y`, breaking changes may ship in a minor release, b
 
 [.github/workflows/release.yml](../.github/workflows/release.yml) runs when a `v*.*.*` tag is pushed. It re-runs the Node typecheck, build, and tests; builds the Docker image; pushes image tags computed by `docker/metadata-action`; and creates a GitHub Release with auto-generated notes from the commits since the last tag.
 
-| Tag                | Published when                          | Stability                                |
-| ------------------ | --------------------------------------- | ---------------------------------------- |
-| `:X.Y.Z`           | Stable `vX.Y.Z` tag                     | Immutable release pin.                   |
-| `:X.Y`             | Stable `vX.Y.Z` tag                     | Moving latest patch in a minor series.   |
-| `:latest`          | Stable `vX.Y.Z` tag                     | Moving latest stable release.            |
-| `:X.Y.Z-rc.N`      | Pre-release tag                         | Immutable pre-release pin.               |
-| `:edge`, `:main`   | Push to `main` after CI passes          | Moving unreleased build.                 |
+| Tag              | Published when                 | Stability                              |
+| ---------------- | ------------------------------ | -------------------------------------- |
+| `:X.Y.Z`         | Stable `vX.Y.Z` tag            | Immutable release pin.                 |
+| `:X.Y`           | Stable `vX.Y.Z` tag            | Moving latest patch in a minor series. |
+| `:latest`        | Stable `vX.Y.Z` tag            | Moving latest stable release.          |
+| `:X.Y.Z-rc.N`    | Pre-release tag                | Immutable pre-release pin.             |
+| `:edge`, `:main` | Push to `main` after CI passes | Moving unreleased build.               |
 
 Pre-release tags do not move `:latest` or a stable minor-series tag (`docker/metadata-action` is configured with `enable=${{ !contains(github.ref_name, '-') }}` for both).
 
@@ -88,7 +88,3 @@ docker compose -f compose.deploy.yaml up -d
 [compose.deploy.yaml](../compose.deploy.yaml) uses `pull_policy: missing`, so Docker only fetches an image the first time it sees a tag locally. Immutable pins such as `:0.1.0` never need a refresh. Moving tags such as `:latest`, `:0.1`, `:edge`, and `:main` only update when you explicitly run `docker compose -f compose.deploy.yaml pull` before `up -d`.
 
 After upgrades, `docker image prune -f` removes the now-unused previous image layers.
-
-## Agent git verbs
-
-The contract between the user and AI agents for git operations lives in [AGENTS.md](../AGENTS.md#git-workflow-for-agents). The verbs (`commit`, `push`, `release patch|minor|major`, `cut a pre-release …`, `pin the server to X.Y.Z`) and the rule that no history-changing command runs without an explicit user request both live there.

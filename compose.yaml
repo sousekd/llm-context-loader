@@ -3,49 +3,41 @@
 # This is the default file used by `docker compose up`. It builds the image
 # from the current checkout and does not pull from GHCR.
 
-x-llmc-environment: &llmc-environment
-  SERVER_HOST: "${SERVER_HOST:-0.0.0.0}"
-  SERVER_PORT: "${SERVER_PORT:-3010}"
+x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML loading.
+  HOST: "${HOST:-0.0.0.0}"
+  PORT: "${PORT:-3010}"
+  CONFIG_FILE: "${CONFIG_FILE:-config/llm-context-loader.yaml}"
   LOG_LEVEL: "${LOG_LEVEL:-info}"
-  AUTH_ENABLED: "${AUTH_ENABLED:-false}"
-  API_KEY: "${API_KEY:-}"
-  DIAGNOSTIC_FOOTER_ENABLED: "${DIAGNOSTIC_FOOTER_ENABLED:-true}"
-  CLIENTS: "${CLIENTS:-openwebui,jina}"
-  FETCH_PROVIDER: "${FETCH_PROVIDER:-firecrawl}"
-  FETCH_TIMEOUT_SECONDS: "${FETCH_TIMEOUT_SECONDS:-60}"
-  FETCH_CONCURRENCY: "${FETCH_CONCURRENCY:-4}"
-  FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:-http://firecrawl-api:3002}"
-  FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
-  FIRECRAWL_ONLY_MAIN_CONTENT: "${FIRECRAWL_ONLY_MAIN_CONTENT:-true}"
-  LLM_PROVIDER: "${LLM_PROVIDER:-openai_chat}"
-  LLM_BASE_URL: "${LLM_BASE_URL:-http://localhost:8080/v1}"
-  LLM_API_KEY: "${LLM_API_KEY:-}"
-  LLM_MODEL: "${LLM_MODEL:-local-model}"
-  LLM_CONTEXT_TOKENS: "${LLM_CONTEXT_TOKENS:-131072}"
-  LLM_CHARS_PER_TOKEN: "${LLM_CHARS_PER_TOKEN:-4}"
+  LOG_PRETTY: "${LOG_PRETTY:-auto}"
+
+  # Pipeline concurrency and renderer selection.
+  SOURCE_CONCURRENCY: "${SOURCE_CONCURRENCY:-1}"
   LLM_CONCURRENCY: "${LLM_CONCURRENCY:-1}"
-  LLM_EXTRA_BODY: "${LLM_EXTRA_BODY:-}"
-  CLEAN_ENABLED: "${CLEAN_ENABLED:-true}"
-  CLEAN_MIN_INPUT_CHARS: "${CLEAN_MIN_INPUT_CHARS:-500}"
-  CLEAN_MAX_INPUT_CHARS: "${CLEAN_MAX_INPUT_CHARS:-75000}"
-  CLEAN_OUTPUT_RATIO: "${CLEAN_OUTPUT_RATIO:-0.5}"
+  DEFAULT_OUTPUT_RENDERER: "${DEFAULT_OUTPUT_RENDERER:-debug-xml}"
+  DEBUG_XML_INCLUDE_SKIPPED: "${DEBUG_XML_INCLUDE_SKIPPED:-false}"
+  OUTPUT_TARGET_CHARS: "${OUTPUT_TARGET_CHARS:-25000}"
+
+  # Source provider.
+  FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env or the shell}"
+  FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
+
+  # LLM provider.
+  LLM_BASE_URL: "${LLM_BASE_URL:?Set LLM_BASE_URL in .env or the shell}"
+  LLM_API_KEY: "${LLM_API_KEY:-}"
+  LLM_MODEL: "${LLM_MODEL:?Set LLM_MODEL in .env or the shell}"
+  LLM_CONTEXT_TOKENS: "${LLM_CONTEXT_TOKENS:-}"
+  LLM_CHARS_PER_TOKEN: "${LLM_CHARS_PER_TOKEN:-3.5}"
+  LLM_SAFETY_MARGIN_TOKENS: "${LLM_SAFETY_MARGIN_TOKENS:-128}"
+
+  # Step thresholds and timeouts.
+  LOAD_SOURCE_TIMEOUT_SECONDS: "${LOAD_SOURCE_TIMEOUT_SECONDS:-20}"
   CLEAN_TIMEOUT_SECONDS: "${CLEAN_TIMEOUT_SECONDS:-60}"
-  CLEAN_QUALITY_MIN_RATIO: "${CLEAN_QUALITY_MIN_RATIO:-0.02}"
-  CLEAN_CHECK_URLS: "${CLEAN_CHECK_URLS:-true}"
-  SUMMARIZE_ENABLED: "${SUMMARIZE_ENABLED:-false}"
-  SUMMARIZE_MIN_INPUT_CHARS: "${SUMMARIZE_MIN_INPUT_CHARS:-25000}"
-  SUMMARIZE_MAX_INPUT_CHARS: "${SUMMARIZE_MAX_INPUT_CHARS:-0}"
-  SUMMARIZE_OUTPUT_RATIO: "${SUMMARIZE_OUTPUT_RATIO:-0.15}"
+  CLEAN_MIN_INPUT_CHARS: "${CLEAN_MIN_INPUT_CHARS:-1000}"
   SUMMARIZE_TIMEOUT_SECONDS: "${SUMMARIZE_TIMEOUT_SECONDS:-60}"
-  SUMMARIZE_QUALITY_MIN_RATIO: "${SUMMARIZE_QUALITY_MIN_RATIO:-0.01}"
-  SUMMARIZE_CHECK_URLS: "${SUMMARIZE_CHECK_URLS:-false}"
-  TRUNCATE_TARGET_CHARS: "${TRUNCATE_TARGET_CHARS:-25000}"
-  TEMPLATE_DIR: "${TEMPLATE_DIR:-./templates}"
-  CLEAN_SYSTEM_TEMPLATE: "${CLEAN_SYSTEM_TEMPLATE:-clean.system.md}"
-  CLEAN_USER_TEMPLATE: "${CLEAN_USER_TEMPLATE:-clean.user.md}"
-  SUMMARIZE_SYSTEM_TEMPLATE: "${SUMMARIZE_SYSTEM_TEMPLATE:-summarize.system.md}"
-  SUMMARIZE_USER_TEMPLATE: "${SUMMARIZE_USER_TEMPLATE:-summarize.user.md}"
-  FOOTER_TEMPLATE: "${FOOTER_TEMPLATE:-footer.md}"
+
+  # Per-adapter inbound bearer tokens. Empty means open route.
+  OWUI_AUTH_TOKEN: "${OWUI_AUTH_TOKEN:-}"
+  JINA_AUTH_TOKEN: "${JINA_AUTH_TOKEN:-}"
 
 services:
   llm-context-loader:
@@ -55,7 +47,8 @@ services:
     container_name: llm-context-loader
     restart: unless-stopped
     ports:
-      - "${SERVER_PORT:-3010}:${SERVER_PORT:-3010}"
+      - "${PORT:-3010}:${PORT:-3010}"
     environment: *llmc-environment
     volumes:
+      - ./config:/app/config:ro
       - ./templates:/app/templates:ro

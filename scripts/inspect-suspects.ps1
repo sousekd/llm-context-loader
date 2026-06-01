@@ -5,7 +5,7 @@
 # For each URL three artifacts are written to scripts/out/:
 #   <slug>.source.md   - raw Firecrawl markdown
 #   <slug>.clean.md    - loader's /r/<url> body (including footer)
-#   <slug>.footer.txt  - extracted <context_loader_info .../> line (or empty)
+#   <slug>.footer.txt  - extracted <loader_info .../> line (or empty)
 #
 # Console output: source/clean char counts, head/tail previews, and the
 # parsed footer attributes so you can spot the regression without opening
@@ -37,8 +37,8 @@
 param(
     [string]   $UrlFile,
     [string[]] $Urls,
-    [int]      $HeadBytes        = 600,
-    [int]      $TailBytes        = 400,
+    [int]      $HeadBytes = 600,
+    [int]      $TailBytes = 400,
     [int]      $HealthTimeoutSec = 5,
     [switch]   $SkipHealthCheck
 )
@@ -53,9 +53,11 @@ $defaultSuspects = @(
 
 if ($UrlFile) {
     $Urls = Read-UrlFile -Path $UrlFile
-} elseif ($Urls -and $Urls.Count -gt 0) {
+}
+elseif ($Urls -and $Urls.Count -gt 0) {
     $Urls = ConvertTo-UrlArray -Urls $Urls
-} else {
+}
+else {
     $Urls = $defaultSuspects
 }
 
@@ -64,9 +66,9 @@ if (-not $Urls -or $Urls.Count -eq 0) {
     exit 1
 }
 
-$loader    = Get-LoaderDefaults
+$loader = Get-LoaderDefaults
 $firecrawl = Get-FirecrawlDefaults
-$loaderHeaders    = Get-BearerHeaders -ApiKey $loader.ApiKey
+$loaderHeaders = Get-BearerHeaders -ApiKey $loader.ApiKey
 $firecrawlHeaders = Get-BearerHeaders -ApiKey $firecrawl.ApiKey
 
 if (-not $SkipHealthCheck) {
@@ -110,7 +112,8 @@ foreach ($url in $Urls) {
             -Body $body -TimeoutSec 120
         $src = $firecrawlResponse.data.markdown
         if (-not $src) { $src = $firecrawlResponse.data.content }
-    } catch {
+    }
+    catch {
         Write-Host ("  firecrawl ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
         $fail++
         continue
@@ -122,7 +125,8 @@ foreach ($url in $Urls) {
         $loaderResponse = Invoke-WebRequest -Uri ("$($loader.LoaderBase)/r/" + $url) `
             -Headers $loaderHeaders -UseBasicParsing -TimeoutSec 240
         $clean = $loaderResponse.Content
-    } catch {
+    }
+    catch {
         Write-Host ("  loader ERROR: {0}" -f $_.Exception.Message) -ForegroundColor Red
         $fail++
         continue
@@ -142,7 +146,8 @@ foreach ($url in $Urls) {
                 Write-Host ("    {0,-18} {1}" -f $name, $attrs[$name])
             }
         }
-    } else {
+    }
+    else {
         Write-Host '  --- FOOTER --- <none>'
     }
 

@@ -1,4 +1,4 @@
-# Build artifacts and dependencies (rebuilt inside the image)
+# Build artifacts and dependencies rebuilt inside the image
 node_modules
 dist
 coverage
@@ -10,11 +10,11 @@ coverage
 .gitattributes
 .github
 
-# Local config / secrets
+# Environment files are supplied at runtime, never baked into the image
 .env
 .env.*
 
-# Tests and dev tooling (not needed in runtime image)
+# Tests and dev tooling not needed in the runtime image
 tests
 vitest.config.ts
 tsconfig.test.json
@@ -27,7 +27,7 @@ npm-debug.log*
 .idea
 .DS_Store
 
-# Repo docs (kept in the source tree, excluded from the image to keep it small)
+# Repository docs stay outside the runtime image
 README.md
 docs
 AGENTS.md

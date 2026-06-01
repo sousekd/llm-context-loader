@@ -24,9 +24,9 @@
 
 [CmdletBinding(DefaultParameterSetName = 'File')]
 param(
-    [Parameter(ParameterSetName = 'File',   Mandatory)] [string]   $UrlFile,
+    [Parameter(ParameterSetName = 'File', Mandatory)] [string]   $UrlFile,
     [Parameter(ParameterSetName = 'Inline', Mandatory)] [string[]] $Urls,
-    [int]    $Concurrency      = 5,
+    [int]    $Concurrency = 5,
     [int]    $HealthTimeoutSec = 5,
     [switch] $SkipHealthCheck
 )
@@ -35,7 +35,8 @@ param(
 
 if ($PSCmdlet.ParameterSetName -eq 'File') {
     $Urls = Read-UrlFile -Path $UrlFile
-} else {
+}
+else {
     $Urls = ConvertTo-UrlArray -Urls $Urls
 }
 
@@ -44,9 +45,10 @@ if (-not $Urls -or $Urls.Count -eq 0) {
     exit 1
 }
 
-$defaults    = Get-LoaderDefaults
-$loaderBase  = $defaults.LoaderBase
+$defaults = Get-LoaderDefaults
+$loaderBase = $defaults.LoaderBase
 $authHeaders = Get-BearerHeaders -ApiKey $defaults.ApiKey
+$sharedLib = Join-Path $PSScriptRoot 'shared-lib.ps1'
 
 if (-not $SkipHealthCheck) {
     if (-not (Wait-LoaderHealth -LoaderBase $loaderBase -TimeoutSec $HealthTimeoutSec)) {
@@ -59,25 +61,25 @@ if (-not $SkipHealthCheck) {
 Write-Host ("=== GET {0}/r/<url>  urls={1}  concurrency={2} ===" -f $loaderBase, $Urls.Count, $Concurrency) -ForegroundColor Cyan
 $swAll = [System.Diagnostics.Stopwatch]::StartNew()
 
-# Note: functions dot-sourced into the parent runspace are not visible inside
-# ForEach-Object -Parallel, so the footer line extractor is inlined below.
 $results = $Urls | ForEach-Object -ThrottleLimit $Concurrency -Parallel {
-    $url     = $_
-    $base    = $using:loaderBase
+    $url = $_
+    $base = $using:loaderBase
     $headers = $using:authHeaders
+    . $using:sharedLib
 
-    $sw           = [System.Diagnostics.Stopwatch]::StartNew()
-    $ok           = $false
-    $len          = 0
-    $footer       = ''
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $ok = $false
+    $len = 0
+    $footer = ''
     $errorMessage = ''
     try {
         $response = Invoke-WebRequest -Uri ("$base/r/" + $url) -Headers $headers -UseBasicParsing -TimeoutSec 240
         $sw.Stop()
-        $ok     = $true
-        $len    = $response.Content.Length
-        $footer = ($response.Content -split "`n" | Where-Object { $_ -match '<context_loader_info' } | Select-Object -Last 1)
-    } catch {
+        $ok = $true
+        $len = $response.Content.Length
+        $footer = Get-LoaderFooterLine -Content $response.Content
+    }
+    catch {
         $sw.Stop()
         $errorMessage = $_.Exception.Message
     }
