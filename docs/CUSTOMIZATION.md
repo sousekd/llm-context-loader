@@ -118,6 +118,18 @@ config:
 
 The provider calls `/v2/scrape` and returns markdown plus an optional title. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
 
+### `docling`
+
+```yaml
+config:
+  baseUrl: ${DOCLING_BASE_URL}
+  apiKey: ${DOCLING_API_KEY:-}
+  doOcr: true
+  tableMode: accurate
+```
+
+The provider calls `POST /v1/convert/source` and returns markdown plus an optional title from the document's JSON name field. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
+
 ## LLM Providers
 
 ### `openai-chat`
@@ -171,7 +183,7 @@ Adjacent steps that share the same `concurrencyGroup` share one limiter acquisit
 
 ```yaml
 config:
-  provider: default-firecrawl
+  provider: ${SOURCE_PROVIDER:-default-firecrawl}
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.

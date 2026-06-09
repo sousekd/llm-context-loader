@@ -31,7 +31,7 @@ describe("composeApp", () => {
     expect(loaded.registries.llmProviders.require("default-llm").name).toBe("default-llm");
     expect(
       loaded.registries.pipelines.find(pipeline => pipeline.name === "default")?.steps.map(entry => entry.name)
-    ).toEqual(["firecrawl", "clean", "truncate"]);
+    ).toEqual(["fetch", "clean", "truncate"]);
     expect(loaded.adapters.http.map(adapter => adapter.name)).toEqual(["open-webui"]);
     expect(logs.some(log => log.level === "warn" && log.message === "Adapter bearer auth is disabled.")).toBe(true);
   });
@@ -273,7 +273,7 @@ pipelines:
       llm: \${LLM_CONCURRENCY:-1}
     steps:
       - type: load-source
-        name: firecrawl
+        name: fetch
         concurrencyGroup: source
         config:
           provider: default-firecrawl

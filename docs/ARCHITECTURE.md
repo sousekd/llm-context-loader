@@ -66,7 +66,7 @@ scripts/                     developer smoke helpers
 The current built-ins are:
 
 - HTTP adapters: `open-webui`, `jina`.
-- Source providers: `firecrawl`.
+- Source providers: `firecrawl`, `docling`.
 - LLM providers: `openai-chat`.
 - Pipeline steps: `load-source`, `llm-pass`, `truncate`, `capture-urls`, `verify-urls`.
 - Output renderers: `debug-xml`, `passthrough`.

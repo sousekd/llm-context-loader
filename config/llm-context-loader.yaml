@@ -36,6 +36,13 @@ sourceProviders:
       onlyMainContent: true
       formats: [markdown]
       maxAge: 0
+  default-docling:
+    type: docling
+    config:
+      baseUrl: ${DOCLING_BASE_URL}
+      apiKey: ${DOCLING_API_KEY:-}
+      doOcr: true
+      tableMode: accurate
 
 # LLM providers run prompt-rendered chat-completions passes.
 llmProviders:
@@ -60,11 +67,11 @@ pipelines:
     steps:
       # Fetch source markdown and keep source work in the source limiter group.
       - type: load-source
-        name: firecrawl
+        name: fetch
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: default-firecrawl
+          provider: ${SOURCE_PROVIDER:-default-firecrawl}
       # Capture trusted source URLs before any LLM pass can alter the body.
       - type: capture-urls
         name: capture_source_urls

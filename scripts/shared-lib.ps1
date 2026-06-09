@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Continue'
 $script:SmokeFooterAttrs = @(
   @{ Attr = 'returned'; Label = 'Returned breakdown' },
   @{ Attr = 'result'; Label = 'Pipeline result breakdown' },
-  @{ Node = 'firecrawl'; Attr = 'status'; LegacyAttr = 'fetch_status'; Label = 'Fetch status breakdown' },
+  @{ Node = 'fetch'; Attr = 'status'; LegacyAttr = 'fetch_status'; Label = 'Fetch status breakdown' },
   @{ Node = 'capture_source_urls'; Attr = 'status'; Label = 'Capture-urls status breakdown' },
   @{ Node = 'clean'; Attr = 'status'; LegacyAttr = 'clean_status'; Label = 'Clean status breakdown' },
   @{ Node = 'verify_after_clean'; Attr = 'status'; Label = 'Verify-after-clean status breakdown' },

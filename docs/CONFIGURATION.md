@@ -47,9 +47,15 @@ These are consumed by helper scripts and ignored by the Node app.
 
 The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
 
-The default pipeline cannot run without a Firecrawl base URL, an OpenAI-compatible LLM base URL, and a model name. Compose enforces those three values up front with required-variable interpolation. Direct Node startup enforces them during YAML substitution and provider config parsing.
+The default pipeline cannot run without a source provider base URL, an OpenAI-compatible LLM base URL, and a model name. Compose enforces those values up front with required-variable interpolation. Direct Node startup enforces them during YAML substitution and provider config parsing.
 
 The placeholders below are grouped by the part of the pipeline they configure.
+
+### Source provider selection
+
+| Variable          | Default / behavior  | Purpose                                                        |
+| ----------------- | ------------------- | -------------------------------------------------------------- |
+| `SOURCE_PROVIDER` | `default-firecrawl` | Named source provider used by the `load-source` pipeline step. |
 
 ### Source provider (Firecrawl)
 
@@ -57,6 +63,13 @@ The placeholders below are grouped by the part of the pipeline they configure.
 | -------------------- | ------------------ | -------------------------------- |
 | `FIRECRAWL_BASE_URL` | Required           | Firecrawl base URL.              |
 | `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token. |
+
+### Source provider (Docling)
+
+| Variable           | Default / behavior | Purpose                   |
+| ------------------ | ------------------ | ------------------------- |
+| `DOCLING_BASE_URL` | Required           | Docling Serve base URL.   |
+| `DOCLING_API_KEY`  | empty              | Optional Docling API key. |
 
 ### LLM provider (OpenAI-compatible)
 
@@ -114,7 +127,7 @@ YAML substitution happens before schema validation.
 
 Substitution applies recursively to YAML string values. Non-string YAML values are left as YAML values and then parsed by schemas.
 
-Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
+Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
 
 Docker Compose performs its own interpolation before the container starts. The shipped Compose files use `${VAR:?message}` for values that must be supplied by `.env` or the shell, so missing or blank provider values fail before the container is created.
 
@@ -129,6 +142,7 @@ Inbound authentication is configured per HTTP adapter in YAML. The default YAML 
 Outbound authentication is configured per provider:
 
 - `FIRECRAWL_API_KEY` is sent as bearer auth to Firecrawl when set.
+- `DOCLING_API_KEY` is sent via the `X-Api-Key` header to Docling Serve when set.
 - `LLM_API_KEY` is sent as bearer auth to the OpenAI-compatible endpoint when set.
 
 ## Local And Container Networking
@@ -139,7 +153,7 @@ When running in Docker, `localhost` inside the container means the container its
 
 ## Common Startup Failures
 
-- Missing required environment variable: a YAML placeholder such as `${FIRECRAWL_BASE_URL}` or `${LLM_MODEL}` was not provided and has no fallback in the running environment.
+- Missing required environment variable: a YAML placeholder such as `${FIRECRAWL_BASE_URL}`, `${DOCLING_BASE_URL}`, or `${LLM_MODEL}` was not provided and has no fallback in the running environment.
 - Missing required Compose variable: a Compose placeholder such as `${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env or the shell}` was unset or blank.
 - Invalid YAML shape: the top-level YAML structure failed the coarse schema in `src/config/yaml/yaml-config.ts`.
 - Unknown type: a YAML `type` does not exist in the selected built-in descriptor bundles.

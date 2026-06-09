@@ -48,14 +48,14 @@ Three cross-cutting changes enable the rest:
 
 The pivot above, sequenced so each step delivers value on its own and de-risks the next.
 
-1. **Docling fetch provider (Markdown).** A drop-in `SourceProvider` over `docling-serve` (`POST /v1/convert/source`). No core changes; it immediately adds a higher-fidelity, document-capable (PDF, Office) alternative to Firecrawl.
-2. **Content-typed body and fetch output formats.** Add a media type to the body and `SourceDocument`; let Firecrawl and Docling return HTML and tag it. This is the keystone everything else builds on.
-3. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
-4. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
-5. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and add fenced-code-block verification/repair for the summarize stage.
+1. **Content-typed body and fetch output formats.** Add a media type to the body and `SourceDocument`; let Firecrawl and Docling return HTML and tag it. This is the keystone everything else builds on.
+2. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
+3. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
+4. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and add fenced-code-block verification/repair for the summarize stage.
 
 A couple of polish items ride along:
 
+- **Configuration validation redesign.** Today every configured provider and step is constructed eagerly at compose time, so an unused source provider still requires its base URL and an unused LLM provider still requires its model. Redesign so providers and steps validate their config only when the active pipeline references them.
 - **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
 - **Better defaults and prompts.** Test and tune the shipped defaults and prompts.
 
