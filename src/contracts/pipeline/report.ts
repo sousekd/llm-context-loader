@@ -23,8 +23,8 @@ export interface StepOutcome {
   readonly name: string;
   readonly type: string;
   readonly status: StepStatus;
-  readonly inputChars?: number;
-  readonly outputChars?: number;
+  readonly inputLength?: number;
+  readonly outputLength?: number;
   readonly reason?: string;
 }
 
@@ -40,8 +40,8 @@ export interface PipelineReport {
   readonly url: string;
   readonly startedAt: number;
   readonly durationMs: number;
-  readonly initialChars: number;
-  readonly finalChars: number;
+  readonly initialLength: number;
+  readonly finalLength: number;
   readonly ratio?: number;
   readonly returned: string;
   readonly result: PipelineRunStatus;

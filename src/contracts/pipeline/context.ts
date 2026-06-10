@@ -18,16 +18,44 @@ import type { StepOutcome } from "./report.js";
  */
 export type ScalarValue = string | number | boolean;
 
-/** Represents a content-typed body and its optional title. */
-export interface BodyContent {
-  readonly content: string;
-  readonly mediaType: string;
+/** Fields shared by every body representation. */
+export interface BodyBase {
   readonly title?: string;
 }
 
-/** Describes one version of the orchestrator-owned body. */
-export interface BodyVersion extends BodyContent {
-  readonly stepName: string;
+/** A text body carried as a string. */
+export interface TextBody extends BodyBase {
+  readonly kind: "text";
+  readonly mediaType: string;
+  readonly content: string;
+}
+
+/** A binary body carried as bytes. */
+export interface BinaryBody extends BodyBase {
+  readonly kind: "binary";
+  readonly mediaType: string;
+  readonly bytes: Uint8Array;
+}
+
+/** The pipeline body in either representation. */
+export type BodyContent = TextBody | BinaryBody;
+
+/** One version of the orchestrator-owned body. */
+export type BodyVersion = BodyContent & { readonly stepName: string };
+
+/** Narrows a body to its text representation. */
+export function isTextBody(body: BodyContent): body is TextBody {
+  return body.kind === "text";
+}
+
+/** Narrows a body to its binary representation. */
+export function isBinaryBody(body: BodyContent): body is BinaryBody {
+  return body.kind === "binary";
+}
+
+/** Returns the body length: characters for text, bytes for binary. */
+export function bodyLength(body: BodyContent): number {
+  return body.kind === "text" ? body.content.length : body.bytes.byteLength;
 }
 
 /** Carries the immutable caller input for one configured pipeline invocation. */
@@ -37,7 +65,7 @@ export interface PipelineInput {
 
 /** Exposes read-only access to orchestrator-owned body versions during step execution. */
 export interface BodyView {
-  /** Returns the current markdown body, if any. */
+  /** Returns the current content-typed body, if any. */
   current(): BodyContent | undefined;
 
   /** Returns an immutable snapshot of all body versions. */

@@ -1,12 +1,17 @@
 /**
  * Implements URL-to-content loading through Node-native HTTP fetch.
  *
- * This provider fetches the input URL directly and returns the raw response
- * body as the content string. It is a testing-only fallback:
+ * This provider fetches the input URL directly and returns the response body
+ * as a content-typed `SourceDocument`. Text-like responses (determined by
+ * `isTextLike` and the NUL-byte sniff) return the text arm; everything else
+ * returns the binary arm.
+ *
+ * Text declared as HTML with embedded NUL bytes is treated as
+ * `application/octet-stream` binary rather than decoded as text, preventing
+ * lossy byte-to-character conversion from reaching downstream steps.
  *
  * - NO SSRF protection — the request goes wherever the input URL points.
  * - NO JavaScript rendering — returns server-returned source HTML only.
- * - Non-text responses (PDF, images, etc.) are rejected with `unsupported_media_type`.
  *
  * Security: the host adapter's parseHttpUrl guards protocol (http/https only)
  * and absolute form, but does NOT filter private IPs or metadata endpoints.
@@ -52,12 +57,18 @@ async function readLimitedBody(response: Response, maxBytes: number): Promise<Li
   let truncated = false;
 
   try {
-    while (totalBytes < maxBytes) {
+    while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       if (!value) continue;
 
       const needed = maxBytes - totalBytes;
+      if (needed <= 0) {
+        truncated = true;
+        await reader.cancel();
+        break;
+      }
+
       if (value.byteLength <= needed) {
         chunks.push(value);
         totalBytes += value.byteLength;
@@ -93,7 +104,7 @@ export class HttpProvider implements SourceProvider {
     private readonly deps: { readonly httpFetch: typeof globalThis.fetch; readonly logger: Logger }
   ) {}
 
-  /** Loads a URL through native HTTP fetch and returns the raw body content. */
+  /** Loads a URL through native HTTP fetch and returns a typed source document. */
   async load(url: string, opts: { readonly signal: AbortSignal }): Promise<SourceDocument> {
     try {
       const response = await this.deps.httpFetch(url, {
@@ -109,27 +120,27 @@ export class HttpProvider implements SourceProvider {
         });
       }
 
-      const mediaType = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-      if (mediaType && !isTextLike(mediaType)) {
-        throw new UpstreamError(`HTTP fetch returned non-text content type: ${mediaType}`, "unsupported_media_type");
-      }
+      const reported = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      const mediaType = reported || mediaTypes.plainText;
 
       const limited = await readLimitedBody(response, this.config.maxBytes);
-      if (limited.bytes.includes(0)) {
-        throw new UpstreamError("HTTP fetch returned binary content", "unsupported_media_type");
+
+      if (isTextLike(mediaType) && !limited.bytes.includes(0)) {
+        const html = new TextDecoder().decode(limited.bytes);
+        const content = html.trim();
+
+        if (!content) {
+          throw new UpstreamError("HTTP fetch returned empty body", "empty", {
+            upstreamStatus: response.status
+          });
+        }
+
+        const title = this.config.titleFromHtml ? extractTitle(html) : undefined;
+        return { kind: "text", content, mediaType, title, truncated: limited.truncated };
       }
-      const html = new TextDecoder().decode(limited.bytes);
-      const content = html.trim();
 
-      if (!content) {
-        throw new UpstreamError("HTTP fetch returned empty body", "empty", {
-          upstreamStatus: response.status
-        });
-      }
-
-      const title = this.config.titleFromHtml ? extractTitle(html) : undefined;
-
-      return { content, mediaType: mediaType || mediaTypes.plainText, title, truncated: limited.truncated };
+      const binaryMediaType = limited.bytes.includes(0) && isTextLike(mediaType) ? mediaTypes.octetStream : mediaType;
+      return { kind: "binary", bytes: limited.bytes, mediaType: binaryMediaType, truncated: limited.truncated };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

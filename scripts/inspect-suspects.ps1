@@ -84,8 +84,8 @@ New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
 # Footer attributes worth surfacing in the console preview.
 $footerHighlights = @(
-    'returned', 'final_chars',
-    'fetch_status', 'fetch_chars',
+    'returned', 'final_length',
+    'fetch_status', 'fetch_length',
     'clean_status', 'clean_ratio', 'clean_reason',
     'summarize_status', 'summarize_ratio', 'summarize_reason',
     'truncate_status'

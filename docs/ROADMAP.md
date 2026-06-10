@@ -38,15 +38,7 @@ fetch (HTML or Markdown)
 
 The URL-in / clean-Markdown-within-a-budget contract does not change. What changes is how the middle is done: established extraction and conversion tools instead of a model. We own the plumbing — content-type routing, budgets, honesty gates — and the surfaces — HTTP/MCP/CLI, observability, caching. We do not write our own readability heuristics or HTML parser.
 
-Three cross-cutting changes enable the rest:
-
-- **Content-typed body.** The pipeline body and `SourceDocument` carry a media type (Markdown and HTML now; PDF, DOCX, and images later). Steps act or skip based on it.
-- **Fetch providers declare an output format.** Providers that can emit more than one format (Firecrawl, Docling) are configured for the format the pipeline wants, and tag the document they produce so later steps know what they received.
-- **Deterministic transform steps.** Main-content extraction and HTML-to-Markdown conversion become composable steps that run only on a matching content type.
-
 ## Coming soon
-
-The pivot above, sequenced so each step delivers value on its own and de-risks the next.
 
 1. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
 2. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
@@ -63,7 +55,6 @@ A couple of polish items ride along:
 Near-term additions once the pivot above settles.
 
 - **Playwright fetch provider (HTML/DOM)** to remove the hard dependency on a running Firecrawl or Docling instance for HTML pages.
-- **Handling non-HTML, non-Markdown content in the pipeline** for configurations without a conversion-capable fetch provider.
 - **`ContentTransformer` provider category.** Once a second extractor or converter implementation exists, promote the transform steps into a named provider category so the choice is plug-and-play in YAML. Candidate implementations: Readability, node-html-markdown, Turndown, and Trafilatura behind a small service.
 
 ## Mid term

@@ -36,7 +36,7 @@ describe("DoclingProvider", () => {
         table_mode: "fast"
       }
     });
-    expect(document).toEqual({ content: "# hello", mediaType: "text/markdown", title: "Hello" });
+    expect(document).toEqual({ kind: "text", content: "# hello", mediaType: "text/markdown", title: "Hello" });
   });
 
   it("returns html content when output is html", async () => {
@@ -59,7 +59,7 @@ describe("DoclingProvider", () => {
     expect(requestBody).toMatchObject({
       options: { to_formats: ["html", "json"] }
     });
-    expect(document).toEqual({ content: "<p>Hello</p>", mediaType: "text/html", title: "Hello" });
+    expect(document).toEqual({ kind: "text", content: "<p>Hello</p>", mediaType: "text/html", title: "Hello" });
   });
 
   it("accepts partial_success status and missing title", async () => {
@@ -75,7 +75,7 @@ describe("DoclingProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: "# ok", mediaType: "text/markdown" });
+    expect(document).toEqual({ kind: "text", content: "# ok", mediaType: "text/markdown" });
   });
 
   it("omits title when json_content.name is missing or empty", async () => {
@@ -99,10 +99,12 @@ describe("DoclingProvider", () => {
     });
 
     await expect(noName.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
+      kind: "text",
       content: "content",
       mediaType: "text/markdown"
     });
     await expect(emptyName.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
+      kind: "text",
       content: "content",
       mediaType: "text/markdown"
     });

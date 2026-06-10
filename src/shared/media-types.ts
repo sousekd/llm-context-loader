@@ -8,7 +8,11 @@ export const mediaTypes = {
   plainText: "text/plain",
   json: "application/json",
   xml: "application/xml",
-  xhtml: "application/xhtml+xml"
+  xhtml: "application/xhtml+xml",
+  pdf: "application/pdf",
+  png: "image/png",
+  jpeg: "image/jpeg",
+  octetStream: "application/octet-stream"
 } as const;
 
 /** Returns whether a media type can be decoded and carried as UTF-8 text. */

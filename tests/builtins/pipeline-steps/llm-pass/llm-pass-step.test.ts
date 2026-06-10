@@ -9,6 +9,14 @@ import { createTestLogger } from "../../../helpers/logger.js";
 import { makeStepContext } from "../utils.js";
 
 describe("LlmPassStep", () => {
+  it("skips on binary body", async () => {
+    const step = makeStep(llm("ok"));
+
+    const result = await step.run(makeStepContext({ body: { bytes: new Uint8Array([1, 2, 3]) } }));
+
+    expect(result).toMatchObject({ status: "skipped", reason: "unsupported_media_type" });
+  });
+
   it("skips when no body, too short, or too long", async () => {
     const step = makeStep(llm("ok"));
 
@@ -36,7 +44,12 @@ describe("LlmPassStep", () => {
     const result = await step.run(makeStepContext({ body: { content: "source text", title: "Title" } }));
 
     expect(result.status).toBe("ok");
-    expect(result.effects?.body).toEqual({ content: "cleaned", mediaType: "text/markdown", title: "Title" });
+    expect(result.effects?.body).toEqual({
+      kind: "text",
+      content: "cleaned",
+      mediaType: "text/markdown",
+      title: "Title"
+    });
     expect(JSON.stringify(calls[0])).toContain("source text");
   });
 

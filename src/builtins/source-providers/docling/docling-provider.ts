@@ -1,5 +1,5 @@
 /**
- * Implements URL-to-markdown loading through Docling Serve's sync convert endpoint.
+ * Implements typed text loading through Docling Serve's sync convert endpoint.
  *
  * Provider responses are untrusted external content. Upstream HTTP, JSON parse,
  * response-shape, empty-body, and network failures are translated to
@@ -56,7 +56,7 @@ export class DoclingProvider implements SourceProvider {
     private readonly deps: { readonly httpFetch: typeof globalThis.fetch; readonly logger: Logger }
   ) {}
 
-  /** Loads a URL through Docling and returns markdown content. */
+  /** Loads a URL through Docling and returns configured text content. */
   async load(url: string, opts: { readonly signal: AbortSignal }): Promise<SourceDocument> {
     try {
       const response = await this.deps.httpFetch(joinUrl(this.config.baseUrl, "/v1/convert/source"), {
@@ -104,7 +104,7 @@ export class DoclingProvider implements SourceProvider {
       const title = typeof name === "string" && name.length > 0 ? name : undefined;
       const mediaType: string = this.config.output === "html" ? mediaTypes.html : mediaTypes.markdown;
 
-      return { content, mediaType, title };
+      return { kind: "text", content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

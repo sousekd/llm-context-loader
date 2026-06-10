@@ -1,12 +1,13 @@
 /**
- * Appends an XML diagnostic footer to the final markdown body.
+ * Appends an XML diagnostic footer to the final body content.
  *
- * When a pipeline produced no body, the renderer returns the footer alone so
- * Open WebUI and markdown clients still receive visible diagnostics instead of
- * an empty document.
+ * When a pipeline produced no body, or the final body is binary (which cannot
+ * be rendered as text), the renderer returns the footer alone so Open WebUI
+ * and markdown clients still receive visible diagnostics.
  */
 
 import { serializeFooter } from "./footer-serializer.js";
+import { isTextBody } from "../../../contracts/pipeline/context.js";
 
 import type {
   OutputRenderer,
@@ -30,7 +31,7 @@ export class DebugXmlRenderer implements OutputRenderer {
 
   /** Returns the body followed by an XML diagnostic footer. */
   render(input: OutputRendererInput): OutputRendererResult {
-    const content = input.body?.content ?? "";
+    const content = input.body && isTextBody(input.body) ? input.body.content : "";
     const footer = serializeFooter(input.report, {
       rootElement: this.config.rootElement,
       includeSkipped: this.config.includeSkipped

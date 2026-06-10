@@ -13,6 +13,14 @@ function inventory(urls: ReadonlyArray<string>): Map<string, unknown> {
 }
 
 describe("VerifyUrlsStep", () => {
+  it("skips on binary body", async () => {
+    const step = new VerifyUrlsStep({ artifact: ARTIFACT, onHallucination: "report" }, { logger: createTestLogger() });
+
+    const result = await step.run(makeStepContext({ body: { bytes: new Uint8Array([1, 2, 3]) } }));
+
+    expect(result).toMatchObject({ status: "skipped", reason: "unsupported_media_type" });
+  });
+
   it("skips when no body is present", async () => {
     const step = new VerifyUrlsStep({ artifact: ARTIFACT, onHallucination: "report" }, { logger: createTestLogger() });
 
@@ -85,6 +93,7 @@ describe("VerifyUrlsStep", () => {
     expect(result.status).toBe("degraded");
     expect(result.reason).toBe("hallucinated_urls");
     expect(result.effects?.body).toEqual({
+      kind: "text",
       content: "Original body with [good](https://example.com/good)",
       mediaType: "text/markdown",
       title: "Title"

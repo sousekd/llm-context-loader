@@ -1,5 +1,5 @@
 /**
- * Implements URL-to-markdown loading through Firecrawl's v2 scrape endpoint.
+ * Implements typed text loading through Firecrawl's v2 scrape endpoint.
  *
  * Provider responses are untrusted external content. Upstream HTTP, JSON parse,
  * response-shape, empty-body, and network failures are translated to
@@ -47,7 +47,7 @@ export class FirecrawlProvider implements SourceProvider {
     private readonly deps: { readonly httpFetch: typeof globalThis.fetch; readonly logger: Logger }
   ) {}
 
-  /** Loads a URL through Firecrawl and returns markdown content. */
+  /** Loads a URL through Firecrawl and returns configured text content. */
   async load(url: string, opts: { readonly signal: AbortSignal }): Promise<SourceDocument> {
     try {
       const response = await this.deps.httpFetch(joinUrl(this.config.baseUrl, "/v2/scrape"), {
@@ -94,7 +94,7 @@ export class FirecrawlProvider implements SourceProvider {
         });
       const title = data.title ?? (typeof metadata.title === "string" ? metadata.title : undefined);
       const mediaType: string = this.config.output === "markdown" ? mediaTypes.markdown : mediaTypes.html;
-      return { content, mediaType, title };
+      return { kind: "text", content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

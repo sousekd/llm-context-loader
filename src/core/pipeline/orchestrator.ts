@@ -16,7 +16,13 @@ import { ReadonlyArtifactBag, ReadonlySignalBag } from "./context.js";
 import { applyStepEffects } from "./effects.js";
 import { finalizeReport } from "./report.js";
 
-import type { PipelineContext, PipelineInput, ScalarValue } from "../../contracts/pipeline/context.js";
+import {
+  bodyLength,
+  type PipelineContext,
+  type PipelineInput,
+  type ScalarValue
+} from "../../contracts/pipeline/context.js";
+
 import type { PipelineRunResult, StepOutcome, StepReport } from "../../contracts/pipeline/report.js";
 import type { StepResult } from "../../contracts/pipeline/step.js";
 import type { Logger } from "../../shared/logger.js";
@@ -99,8 +105,8 @@ export class PipelineOrchestrator {
         pipeline: pipeline.name,
         duration_ms: durationMs,
         result: report.result,
-        final_chars: report.finalChars,
-        initial_chars: report.initialChars,
+        final_length: report.finalLength,
+        initial_length: report.initialLength,
         returned: report.returned
       },
       "Pipeline finished."
@@ -159,14 +165,15 @@ export class PipelineOrchestrator {
     startedAt: number
   ): Promise<void> {
     const { entry, index } = step;
-    const inputChars = state.body.current()?.content.length;
+    const current = state.body.current();
+    const inputLength = current ? bodyLength(current) : undefined;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), entry.timeoutSeconds * 1000);
     const stepStartedAt = this.clock.now();
     let result: StepResult;
 
     this.logger.debug(
-      { pipeline: pipeline.name, step: entry.name, type: entry.type, step_index: index, input_chars: inputChars },
+      { pipeline: pipeline.name, step: entry.name, type: entry.type, step_index: index, input_length: inputLength },
       "Step starting..."
     );
 
@@ -195,7 +202,7 @@ export class PipelineOrchestrator {
       clearTimeout(timer);
     }
 
-    this.recordStepResult(step, pipeline, result, state, stepStartedAt, inputChars);
+    this.recordStepResult(step, pipeline, result, state, stepStartedAt, inputLength);
   }
 
   /** Applies a step result and appends its outcome and report records. */
@@ -205,7 +212,7 @@ export class PipelineOrchestrator {
     result: StepResult,
     state: RuntimeState,
     stepStartedAt: number,
-    inputChars = state.body.current()?.content.length
+    inputLength?: number
   ): void {
     const { entry, index } = step;
     const applied = applyStepEffects(entry.name, result, state);
@@ -214,8 +221,8 @@ export class PipelineOrchestrator {
       type: entry.type,
       status: result.status,
       reason: result.reason,
-      inputChars,
-      outputChars: applied.outputChars
+      inputLength,
+      outputLength: applied.outputLength
     };
     const durationMs = this.clock.now() - stepStartedAt;
     const report: StepReport = { ...outcome, startedAt: stepStartedAt, durationMs, diagnostics: result.diagnostics };
@@ -230,7 +237,7 @@ export class PipelineOrchestrator {
       status: result.status,
       reason: result.reason,
       duration_ms: durationMs,
-      output_chars: applied.outputChars,
+      output_length: applied.outputLength,
       upstream_code: result.diagnostics?.attributes?.["upstream_code"],
       upstream_status: result.diagnostics?.attributes?.["upstream_status"]
     };

@@ -7,7 +7,7 @@
  * report; `skipped` and `failed` results never mutate state.
  */
 
-import type { ScalarValue } from "../../contracts/pipeline/context.js";
+import { bodyLength, type ScalarValue } from "../../contracts/pipeline/context.js";
 import type { StepResult } from "../../contracts/pipeline/step.js";
 import type { BodyStore } from "./body.js";
 
@@ -20,7 +20,7 @@ export interface EffectState {
 
 /** Summarizes state changes applied after an ok or failed step result. */
 export interface AppliedEffectsSummary {
-  readonly outputChars?: number;
+  readonly outputLength?: number;
   readonly wroteBody: boolean;
 }
 
@@ -50,7 +50,7 @@ export function applyStepEffects(stepName: string, result: StepResult, state: Ef
   }
 
   return {
-    outputChars: result.effects.body?.content.length,
+    outputLength: result.effects.body ? bodyLength(result.effects.body) : undefined,
     wroteBody: Boolean(result.effects.body)
   };
 }

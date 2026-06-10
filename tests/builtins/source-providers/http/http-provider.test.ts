@@ -1,7 +1,6 @@
 /** Verifies HTTP source-provider request, response, and failure behavior. */
 import { describe, expect, it } from "vitest";
 
-import { UpstreamError } from "../../../../src/shared/errors.js";
 import { parseHttpConfig } from "../../../../src/builtins/source-providers/http/http-provider-config.js";
 import { HttpProvider } from "../../../../src/builtins/source-providers/http/http-provider.js";
 import { createTestLogger } from "../../../helpers/logger.js";
@@ -21,6 +20,7 @@ describe("HttpProvider", () => {
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(document).toEqual({
+      kind: "text",
       content: expect.stringContaining("Hello"),
       mediaType: "text/plain",
       title: "My Page",
@@ -37,7 +37,12 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: expect.stringContaining("Test"), mediaType: "text/plain", truncated: false });
+    expect(document).toEqual({
+      kind: "text",
+      content: expect.stringContaining("Test"),
+      mediaType: "text/plain",
+      truncated: false
+    });
   });
 
   it("sets the configured user agent", async () => {
@@ -73,8 +78,11 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content.length).toBe(100);
-    expect(document.content).toBe("a".repeat(100));
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") {
+      expect(document.content.length).toBe(100);
+      expect(document.content).toBe("a".repeat(100));
+    }
     expect(document.truncated).toBe(true);
   });
 
@@ -95,8 +103,33 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content.length).toBe(600);
-    expect(document.content).toBe("a".repeat(500) + "b".repeat(100));
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") {
+      expect(document.content.length).toBe(600);
+      expect(document.content).toBe("a".repeat(500) + "b".repeat(100));
+    }
+    expect(document.truncated).toBe(true);
+  });
+
+  it("reports truncated when a streamed body exactly fills the cap before more data", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode("a".repeat(100)));
+        controller.enqueue(encoder.encode("b"));
+        controller.close();
+      }
+    });
+    const fetchFn: typeof fetch = async () => new Response(stream);
+    const provider = new HttpProvider(parseHttpConfig({ maxBytes: 100 }), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toBe("a".repeat(100));
     expect(document.truncated).toBe(true);
   });
 
@@ -116,7 +149,8 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content).toBe("a".repeat(50));
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toBe("a".repeat(50));
     expect(document.truncated).toBe(false);
   });
 
@@ -151,9 +185,10 @@ describe("HttpProvider", () => {
     });
   });
 
-  it("rejects application/pdf as unsupported media type", async () => {
+  it("returns application/pdf as a binary body", async () => {
+    const pdfBytes = new TextEncoder().encode("%PDF-1.7...");
     const fetchFn: typeof fetch = async () =>
-      new Response("%PDF-1.7...", {
+      new Response(pdfBytes, {
         status: 200,
         headers: { "content-type": "application/pdf" }
       });
@@ -162,39 +197,36 @@ describe("HttpProvider", () => {
       logger: createTestLogger()
     });
 
-    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
-      upstreamCode: "unsupported_media_type"
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toMatchObject({
+      kind: "binary",
+      mediaType: "application/pdf",
+      truncated: false
     });
   });
 
-  it("rejects explicit non-text content type before reading the body", async () => {
-    let readAttempted = false;
-    const response = {
-      ok: true,
-      status: 200,
-      headers: new Headers({ "content-type": "application/pdf" }),
-      body: {
-        getReader() {
-          readAttempted = true;
-          throw new Error("body should not be read");
-        }
-      }
-    } as unknown as Response;
-    const fetchFn: typeof fetch = async () => response;
+  it("returns binary for application/pdf and reads the body", async () => {
+    const fetchFn: typeof fetch = async () =>
+      new Response(new Uint8Array([37, 80, 68, 70]), {
+        status: 200,
+        headers: { "content-type": "application/pdf" }
+      });
     const provider = new HttpProvider(parseHttpConfig({}), {
       httpFetch: fetchFn,
       logger: createTestLogger()
     });
 
-    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
-      upstreamCode: "unsupported_media_type"
-    });
-    expect(readAttempted).toBe(false);
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("binary");
+    if (document.kind === "binary") expect(document.bytes.byteLength).toBeGreaterThan(0);
   });
 
-  it("rejects application/octet-stream with a NUL byte as unsupported media type", async () => {
+  it("returns application/octet-stream body as binary", async () => {
+    const raw = new Uint8Array([104, 105, 0, 101]);
     const fetchFn: typeof fetch = async () =>
-      new Response(new Uint8Array([104, 105, 0, 101]), {
+      new Response(raw, {
         status: 200,
         headers: { "content-type": "application/octet-stream" }
       });
@@ -203,21 +235,27 @@ describe("HttpProvider", () => {
       logger: createTestLogger()
     });
 
-    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
-      upstreamCode: "unsupported_media_type"
-    });
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("binary");
+    if (document.kind === "binary") {
+      expect(document.mediaType).toBe("application/octet-stream");
+      expect(document.bytes).toEqual(raw);
+    }
   });
 
-  it("rejects a missing header with NUL bytes as unsupported media type", async () => {
-    const fetchFn: typeof fetch = async () => new Response(new Uint8Array([78, 0, 97, 0, 109, 0, 101]));
+  it("reclassifies a missing header with NUL bytes as binary", async () => {
+    const raw = new Uint8Array([78, 0, 97, 0, 109, 0, 101]);
+    const fetchFn: typeof fetch = async () => new Response(raw);
     const provider = new HttpProvider(parseHttpConfig({}), {
       httpFetch: fetchFn,
       logger: createTestLogger()
     });
 
-    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
-      upstreamCode: "unsupported_media_type"
-    });
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("binary");
+    if (document.kind === "binary") expect(document.bytes).toEqual(raw);
   });
 
   it("accepts text/html content type", async () => {
@@ -233,7 +271,8 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content).toContain("Hello");
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toContain("Hello");
     expect(document.mediaType).toBe("text/html");
   });
 
@@ -266,7 +305,8 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content).toBe('{"key": "value"}');
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toBe('{"key": "value"}');
     expect(document.mediaType).toBe("application/json");
   });
 
@@ -311,7 +351,8 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document.content).toBe("just text, no NUL bytes");
+    expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toBe("just text, no NUL bytes");
   });
 
   it("rejects empty body as upstream empty response", async () => {
@@ -322,7 +363,8 @@ describe("HttpProvider", () => {
     });
 
     await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
-      upstreamCode: "empty"
+      upstreamCode: "empty",
+      upstreamStatus: 200
     });
   });
 

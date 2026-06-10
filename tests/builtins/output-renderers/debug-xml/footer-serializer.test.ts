@@ -11,8 +11,8 @@ describe("serializeFooter", () => {
 
     expect(footer).toContain('url="https://example.com/?a=1&amp;b=2"');
     expect(footer).toContain('ratio="1.000"');
-    expect(footer).toContain('<firecrawl status="ok" duration_ms="2" output_chars="12" title="A &amp; B"/>');
-    expect(footer).toContain('<truncate status="skipped" reason="under_target" duration_ms="1" input_chars="12"/>');
+    expect(footer).toContain('<firecrawl status="ok" duration_ms="2" output_length="12" title="A &amp; B"/>');
+    expect(footer).toContain('<truncate status="skipped" reason="under_target" duration_ms="1" input_length="12"/>');
   });
 
   it("can omit skipped step elements", () => {
@@ -77,8 +77,8 @@ function makeReport(): PipelineReport {
     url: "https://example.com/?a=1&b=2",
     startedAt: 1,
     durationMs: 3,
-    initialChars: 12,
-    finalChars: 12,
+    initialLength: 12,
+    finalLength: 12,
     ratio: 1,
     returned: "firecrawl",
     result: "ok",
@@ -91,7 +91,7 @@ function makeReport(): PipelineReport {
         status: "ok",
         startedAt: 1,
         durationMs: 2,
-        outputChars: 12,
+        outputLength: 12,
         diagnostics: { attributes: { title: "A & B" } }
       },
       {
@@ -101,7 +101,7 @@ function makeReport(): PipelineReport {
         reason: "under_target",
         startedAt: 3,
         durationMs: 1,
-        inputChars: 12
+        inputLength: 12
       }
     ]
   };

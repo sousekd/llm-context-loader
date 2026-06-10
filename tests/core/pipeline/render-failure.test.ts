@@ -52,8 +52,8 @@ describe("PipelineRunner.renderFailure", () => {
       url: "https://example.com/",
       result: "failed",
       returned: "none",
-      initialChars: 0,
-      finalChars: 0,
+      initialLength: 0,
+      finalLength: 0,
       steps: []
     });
   });

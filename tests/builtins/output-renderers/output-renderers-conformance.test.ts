@@ -19,7 +19,9 @@ describe("built-in output renderers", () => {
       { logger: createTestLogger() }
     );
 
-    const output = renderer.render(makeRenderInput({ body: { content: "hello", mediaType: "text/markdown" } }));
+    const output = renderer.render(
+      makeRenderInput({ body: { kind: "text", content: "hello", mediaType: "text/markdown" } })
+    );
 
     expect(output.markdown).toContain("hello\n\n<loader_info");
     expect(output.markdown).toContain('result="ok"');
@@ -40,8 +42,8 @@ describe("built-in output renderers", () => {
         ...input.report,
         result: "failed",
         returned: "none",
-        initialChars: 0,
-        finalChars: 0,
+        initialLength: 0,
+        finalLength: 0,
         error: "source: timeout"
       }
     });
@@ -56,7 +58,7 @@ describe("built-in output renderers", () => {
     const output = renderer.render({
       ...input,
       body: undefined,
-      report: { ...input.report, result: "failed", returned: "none", initialChars: 0, finalChars: 0 }
+      report: { ...input.report, result: "failed", returned: "none", initialLength: 0, finalLength: 0 }
     });
 
     expect(output.markdown).toBe("Pipeline failed.");

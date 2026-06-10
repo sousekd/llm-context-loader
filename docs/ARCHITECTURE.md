@@ -99,6 +99,15 @@ One important boundary is explicit in the architecture test: `src/core/` must no
 
 `src/core/` is the framework-free runtime engine. It does not know about Firecrawl, OpenAI, Open WebUI, Jina, or provider categories.
 
+The pipeline body is a **discriminated union** (`TextBody | BinaryBody`), discriminated on `kind`:
+
+- **Text bodies** (`kind: "text"`) carry `content` as a `string` and are the payload text-only steps read and write.
+- **Binary bodies** (`kind: "binary"`) carry `bytes` as a `Uint8Array` and are carried through the pipeline for conversion by a later step.
+
+A binary body that reaches the end of the pipeline without being converted is treated as a **failed run** with the error `unconverted_binary: <mediaType>`.
+
+Run reports use representation-neutral length diagnostics: `initial_length` and `final_length` are characters for text bodies and bytes for binary bodies. `ratio` is reported only when the first and final body have the same representation.
+
 Key pieces:
 
 - `PipelineStep` (`src/contracts/pipeline/step.ts`) is the executable step port: `run(ctx): Promise<StepResult>`.

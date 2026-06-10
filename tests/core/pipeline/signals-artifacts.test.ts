@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { PipelineContext } from "../../../src/contracts/pipeline/context.js";
+import { isTextBody } from "../../../src/contracts/pipeline/context.js";
 import type {
   OutputRenderer,
   OutputRendererInput,
@@ -18,7 +19,7 @@ class EmittingStep implements PipelineStep {
     return {
       status: "ok",
       effects: {
-        body: { content: "hello", mediaType: "text/markdown" },
+        body: { kind: "text", content: "hello", mediaType: "text/markdown" },
         signals: { tone: "friendly", score: 7 },
         artifacts: { metrics: { tokens: 42 } }
       }
@@ -33,7 +34,8 @@ class RecordingRenderer implements OutputRenderer {
 
   render(input: OutputRendererInput): OutputRendererResult {
     this.received = input;
-    return { markdown: input.body?.content ?? "" };
+    const content = input.body && isTextBody(input.body) ? input.body.content : "";
+    return { markdown: content };
   }
 }
 

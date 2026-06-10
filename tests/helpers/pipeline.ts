@@ -11,6 +11,7 @@ import { PassthroughRenderer } from "../../src/builtins/output-renderers/passthr
 import { PipelineOrchestrator } from "../../src/core/pipeline/orchestrator.js";
 import { PipelineRunner } from "../../src/core/pipeline/runner.js";
 import { createTestLogger } from "./logger.js";
+import { textBody, binaryBody } from "./body.js";
 
 export class StaticBodyStep implements PipelineStep {
   constructor(private readonly content: string) {}
@@ -18,7 +19,7 @@ export class StaticBodyStep implements PipelineStep {
   async run(_ctx: PipelineContext): Promise<StepResult> {
     return {
       status: "ok",
-      effects: { body: { content: this.content, mediaType: "text/markdown", title: "Test title" } }
+      effects: { body: textBody({ content: this.content, title: "Test title" }) }
     };
   }
 }
@@ -94,21 +95,21 @@ export function makeStaticPipelineHandle(
 
 export function makePipelineResult(content = "hello"): PipelineRunResult {
   return {
-    body: { content, mediaType: "text/markdown", title: "Test title" },
+    body: textBody({ content, title: "Test title" }),
     signals: new Map(),
     artifacts: new Map(),
     report: {
       url: "https://example.com/",
       startedAt: 1,
       durationMs: 2,
-      initialChars: content.length,
-      finalChars: content.length,
+      initialLength: content.length,
+      finalLength: content.length,
       ratio: 1,
       returned: "source",
       result: "ok",
       bodyProducedBy: "source",
       bodyChangedBy: "source",
-      steps: [{ name: "source", type: "test", status: "ok", startedAt: 1, durationMs: 2, outputChars: content.length }]
+      steps: [{ name: "source", type: "test", status: "ok", startedAt: 1, durationMs: 2, outputLength: content.length }]
     }
   };
 }
@@ -122,8 +123,8 @@ export function makeFailedPipelineResult(error = "firecrawl: scrape_retry_limit"
       url: "https://example.com/",
       startedAt: 1,
       durationMs: 2,
-      initialChars: 0,
-      finalChars: 0,
+      initialLength: 0,
+      finalLength: 0,
       returned: "none",
       result: "failed",
       error,
@@ -135,6 +136,41 @@ export function makeFailedPipelineResult(error = "firecrawl: scrape_retry_limit"
           reason: "scrape_retry_limit",
           startedAt: 1,
           durationMs: 2
+        }
+      ]
+    }
+  };
+}
+
+export function makeTerminalBinaryPipelineResult(
+  bytes: Uint8Array,
+  mediaType = "application/pdf",
+  errorMsg = `unconverted_binary: ${mediaType}`
+): PipelineRunResult {
+  return {
+    body: binaryBody({ bytes, mediaType }),
+    signals: new Map(),
+    artifacts: new Map(),
+    report: {
+      url: "https://example.com/",
+      startedAt: 1,
+      durationMs: 2,
+      initialLength: bytes.byteLength,
+      finalLength: bytes.byteLength,
+      ratio: 1,
+      returned: "source",
+      result: "failed",
+      bodyProducedBy: "source",
+      bodyChangedBy: "source",
+      error: errorMsg,
+      steps: [
+        {
+          name: "source",
+          type: "load-source",
+          status: "ok",
+          startedAt: 1,
+          durationMs: 2,
+          outputLength: bytes.byteLength
         }
       ]
     }

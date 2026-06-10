@@ -2,12 +2,22 @@
 import type { BodyContent, PipelineContext, ScalarValue } from "../../../src/contracts/pipeline/context.js";
 import { BodyStore } from "../../../src/core/pipeline/body.js";
 import { ReadonlyArtifactBag, ReadonlySignalBag } from "../../../src/core/pipeline/context.js";
+import { textBody, binaryBody } from "../../helpers/body.js";
 
-/** Body fragment that makes mediaType optional for test ergonomics. */
-type BodyInput = { readonly content: string; readonly mediaType?: string; readonly title?: string };
+/** Body fragment for test ergonomics. Use `content` for a text body, `bytes` for a binary body. */
+type BodyInput =
+  | { readonly content: string; readonly mediaType?: string; readonly title?: string }
+  | { readonly bytes: Uint8Array; readonly mediaType?: string; readonly title?: string };
 
-function normalize(body: BodyInput, mediaType: string): BodyContent {
-  return { content: body.content, mediaType: body.mediaType ?? mediaType, title: body.title };
+function normalize(body: BodyInput, defaultMediaType: string): BodyContent {
+  if ("bytes" in body) {
+    return binaryBody({
+      bytes: body.bytes,
+      mediaType: body.mediaType ?? "application/octet-stream",
+      title: body.title
+    });
+  }
+  return textBody({ content: body.content, mediaType: body.mediaType ?? defaultMediaType, title: body.title });
 }
 
 export function makeStepContext(

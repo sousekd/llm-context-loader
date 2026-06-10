@@ -6,6 +6,14 @@ import { createTestLogger } from "../../../helpers/logger.js";
 import { makeStepContext } from "../utils.js";
 
 describe("TruncateStep", () => {
+  it("skips on binary body", async () => {
+    const step = new TruncateStep({ targetChars: 100 }, { logger: createTestLogger() });
+
+    const result = await step.run(makeStepContext({ body: { bytes: new Uint8Array([1, 2, 3]) } }));
+
+    expect(result).toMatchObject({ status: "skipped", reason: "unsupported_media_type" });
+  });
+
   it("skips without a body or when under target", async () => {
     const step = new TruncateStep({ targetChars: 10 }, { logger: createTestLogger() });
 
@@ -24,8 +32,14 @@ describe("TruncateStep", () => {
     );
 
     expect(result.status).toBe("ok");
-    expect(result.effects?.body?.content).toBe("one t... [TRUNCATED]");
-    expect(result.effects?.body?.content.length).toBe(20);
+    expect(result.effects?.body).toEqual({
+      kind: "text",
+      content: "one t... [TRUNCATED]",
+      mediaType: "text/markdown",
+      title: "Title"
+    });
+    expect(result.effects?.body?.kind).toBe("text");
+    if (result.effects?.body?.kind === "text") expect(result.effects.body.content.length).toBe(20);
     expect(result.effects?.body?.title).toBe("Title");
   });
 
@@ -34,7 +48,13 @@ describe("TruncateStep", () => {
 
     const result = await step.run(makeStepContext({ body: { content: "long content" } }));
 
-    expect(result.effects?.body?.content).toBe("... [TRU");
-    expect(result.effects?.body?.content.length).toBe(8);
+    expect(result.effects?.body).toEqual({
+      kind: "text",
+      content: "... [TRU",
+      mediaType: "text/markdown",
+      title: undefined
+    });
+    expect(result.effects?.body?.kind).toBe("text");
+    if (result.effects?.body?.kind === "text") expect(result.effects.body.content.length).toBe(8);
   });
 });

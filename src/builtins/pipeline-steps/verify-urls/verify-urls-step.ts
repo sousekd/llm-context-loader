@@ -11,7 +11,7 @@
 
 import { collectCanonicalUrlCounts } from "../../../shared/markdown-urls.js";
 
-import type { PipelineContext } from "../../../contracts/pipeline/context.js";
+import { isTextBody, type PipelineContext } from "../../../contracts/pipeline/context.js";
 import type { ChildReportNode, StepDiagnostics } from "../../../contracts/pipeline/diagnostics.js";
 import type { PipelineStep, StepResult } from "../../../contracts/pipeline/step.js";
 import type { Logger } from "../../../shared/logger.js";
@@ -35,6 +35,7 @@ export class VerifyUrlsStep implements PipelineStep {
   async run(ctx: PipelineContext): Promise<StepResult> {
     const body = ctx.body.current();
     if (!body) return { status: "skipped", reason: "no_body" };
+    if (!isTextBody(body)) return { status: "skipped", reason: "unsupported_media_type" };
 
     const inventory = readInventory(ctx, this.options.artifact);
     if (!inventory) return { status: "skipped", reason: "no_inventory" };
@@ -83,7 +84,19 @@ export class VerifyUrlsStep implements PipelineStep {
         status: "degraded",
         reason: "hallucinated_urls",
         effects: {
-          body: { content: rollbackTarget.content, mediaType: rollbackTarget.mediaType, title: rollbackTarget.title }
+          body: isTextBody(rollbackTarget)
+            ? {
+                kind: "text",
+                content: rollbackTarget.content,
+                mediaType: rollbackTarget.mediaType,
+                title: rollbackTarget.title
+              }
+            : {
+                kind: "binary",
+                bytes: rollbackTarget.bytes,
+                mediaType: rollbackTarget.mediaType,
+                title: rollbackTarget.title
+              }
         },
         diagnostics
       };

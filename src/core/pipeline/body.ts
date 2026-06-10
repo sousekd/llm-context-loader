@@ -14,17 +14,30 @@ export class BodyStore implements BodyView {
 
   /** Appends a new body version and makes it current. */
   append(version: BodyVersion): void {
-    this.bodyVersions.push({ ...version });
+    this.bodyVersions.push(cloneBodyVersion(version));
   }
 
   /** Returns the current content-typed body, if any. */
   current(): BodyContent | undefined {
     const latest = this.bodyVersions.at(-1);
-    return latest ? { content: latest.content, mediaType: latest.mediaType, title: latest.title } : undefined;
+    if (!latest) return undefined;
+    return cloneBodyContent(latest);
   }
 
   /** Returns an immutable snapshot of all body versions. */
   versions(): ReadonlyArray<BodyVersion> {
-    return this.bodyVersions.map(version => ({ ...version }));
+    return this.bodyVersions.map(cloneBodyVersion);
   }
+}
+
+/** Copies one body while preserving the representation arm. */
+function cloneBodyContent(body: BodyContent): BodyContent {
+  if (body.kind === "text")
+    return { kind: "text", mediaType: body.mediaType, content: body.content, title: body.title };
+  return { kind: "binary", mediaType: body.mediaType, bytes: new Uint8Array(body.bytes), title: body.title };
+}
+
+/** Copies one stored body version while preserving the step that produced it. */
+function cloneBodyVersion(version: BodyVersion): BodyVersion {
+  return { ...cloneBodyContent(version), stepName: version.stepName };
 }
