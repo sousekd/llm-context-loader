@@ -34,3 +34,5 @@ Read the row that matches your task. Each focused doc is self-contained for its 
 - Do not edit `package.json`'s `version` field by hand. Version bumps use `npm version` only when explicitly requested.
 - When changing the configuration surface, update the source schema, [config/llm-context-loader.yaml](config/llm-context-loader.yaml), [.env.example](.env.example), Compose files when relevant, and the configuration and customization docs in the same change.
 - When changing behavior, keep the docs that describe it accurate in the same change.
+- No gratuitous comments. Inline comments that narrate a change are prohibited ([coding-conventions](docs/agents/coding-conventions.md)). Before adding a comment, ask: will it still be useful after the transient context is gone?
+- Don't over-document trivial changes. A new knob, helper, or internal refactor does not warrant updates to `ARCHITECTURE.md` or `extension-authoring.md`. Update only docs that directly describe the changed surface.
