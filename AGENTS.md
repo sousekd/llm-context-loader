@@ -22,6 +22,7 @@ Read the row that matches your task. Each focused doc is self-contained for its 
 | Run or configure the service, or change the environment surface                        | [docs/CONFIGURATION.md](docs/CONFIGURATION.md), [README.md](README.md)                                               |
 | Work on logging, request context, errors, or diagnostics                               | [docs/agents/logging-and-errors.md](docs/agents/logging-and-errors.md)                                               |
 | Touch auth, URL validation, upstream parsing, XML diagnostics, or other security paths | [docs/agents/security-boundaries.md](docs/agents/security-boundaries.md)                                             |
+| Run smoke tests: start/stop, interpret footers, avoid common traps                     | [docs/agents/smoke-testing.md](docs/agents/smoke-testing.md)                                                         |
 | Change code style, comments, TypeScript conventions, or tests                          | [docs/agents/coding-conventions.md](docs/agents/coding-conventions.md), [docs/TESTING.md](docs/TESTING.md)           |
 | Commit, push, release, or change versioning and deployment                             | [docs/agents/git-workflow.md](docs/agents/git-workflow.md), [docs/RELEASING.md](docs/RELEASING.md)                   |
 | Check scope before adding a feature                                                    | [docs/ROADMAP.md](docs/ROADMAP.md)                                                                                   |
