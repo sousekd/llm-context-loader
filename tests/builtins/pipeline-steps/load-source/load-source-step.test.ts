@@ -30,6 +30,34 @@ describe("LoadSourceStep", () => {
     expect(result.effects?.body).toEqual({ content: "markdown", title: "Title" });
   });
 
+  it("degrades and still writes the body when the provider truncated content", async () => {
+    const step = new LoadSourceStep({
+      sourceProvider: provider({ content: " markdown ", title: "Title", truncated: true }),
+      logger: createTestLogger()
+    });
+
+    const result = await step.run(makeStepContext());
+
+    expect(result).toMatchObject({
+      status: "degraded",
+      reason: "truncated",
+      diagnostics: { attributes: { title: "Title" } }
+    });
+    expect(result.effects?.body).toEqual({ content: "markdown", title: "Title" });
+  });
+
+  it("stays ok when the provider reports truncated false", async () => {
+    const step = new LoadSourceStep({
+      sourceProvider: provider({ content: "markdown", truncated: false }),
+      logger: createTestLogger()
+    });
+
+    const result = await step.run(makeStepContext());
+
+    expect(result.status).toBe("ok");
+    expect(result.reason).toBeUndefined();
+  });
+
   it("maps provider errors to load-source reason tokens", async () => {
     const upstreamFailure = await loadFailure(new UpstreamError("bad", "upstream_bad", { upstreamStatus: 429 }));
     expect(upstreamFailure).toEqual({

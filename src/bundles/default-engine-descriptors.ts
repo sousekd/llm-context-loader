@@ -14,6 +14,7 @@ import { llmPassStepDescriptor } from "../builtins/pipeline-steps/llm-pass/llm-p
 import { loadSourceStepDescriptor } from "../builtins/pipeline-steps/load-source/load-source-step-descriptor.js";
 import { truncateStepDescriptor } from "../builtins/pipeline-steps/truncate/truncate-step-descriptor.js";
 import { verifyUrlsStepDescriptor } from "../builtins/pipeline-steps/verify-urls/verify-urls-step-descriptor.js";
+import { httpProviderDescriptor } from "../builtins/source-providers/http/http-provider-descriptor.js";
 import { firecrawlProviderDescriptor } from "../builtins/source-providers/firecrawl/firecrawl-provider-descriptor.js";
 import { doclingProviderDescriptor } from "../builtins/source-providers/docling/docling-provider-descriptor.js";
 import { createDescriptorRecord } from "../shared/descriptors.js";
@@ -34,7 +35,7 @@ export interface EngineDescriptorBundle {
 /** Bundles the built-in engine descriptors without HTTP adapter descriptors. */
 export const DEFAULT_ENGINE_DESCRIPTOR_BUNDLE: EngineDescriptorBundle = Object.freeze({
   sourceProviders: createDescriptorRecord(
-    [firecrawlProviderDescriptor, doclingProviderDescriptor],
+    [httpProviderDescriptor, firecrawlProviderDescriptor, doclingProviderDescriptor],
     descriptor => descriptor.type
   ),
   llmProviders: createDescriptorRecord([openAiChatProviderDescriptor], descriptor => descriptor.type),

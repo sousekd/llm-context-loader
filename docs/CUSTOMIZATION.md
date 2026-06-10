@@ -105,18 +105,43 @@ Returns the current body without a diagnostic footer. If the pipeline failed bef
 
 ## Source Providers
 
+### `http`
+
+```yaml
+config:
+  userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+  maxBytes: 5000000
+  titleFromHtml: true
+```
+
+| Knob            | Values | Default             | Purpose                                                                                                                                                                                                                                                |
+| --------------- | ------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `userAgent`     | string | Chrome 124 Linux UA | User-Agent header sent with the fetch request.                                                                                                                                                                                                         |
+| `maxBytes`      | int    | `5000000`           | Response body size cap. The body is read as a stream and the connection is cancelled once the cap is reached, so memory stays bounded. When the cap truncates the body, the document is flagged truncated and the load-source step reports `degraded`. |
+| `titleFromHtml` | bool   | `true`              | When enabled, extracts the first `<title>` tag content from the HTML response.                                                                                                                                                                         |
+
+**Security caveat — testing only.** This provider fetches the input URL directly with no SSRF protection. It is intended as a zero-dependency testing fallback — no `baseUrl`, no `apiKey`, no external service required. Non-text responses (PDF, images, etc.) are rejected with `unsupported_media_type`; only textual content types are accepted. No JavaScript rendering is performed.
+
 ### `firecrawl`
 
 ```yaml
 config:
   baseUrl: ${FIRECRAWL_BASE_URL}
   apiKey: ${FIRECRAWL_API_KEY:-}
+  output: markdown
   onlyMainContent: true
-  formats: [markdown]
-  maxAge: 0
+  stripBase64Images: true
+  parsePdf: true
 ```
 
-The provider calls `/v2/scrape` and returns markdown plus an optional title. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
+| Knob                | Values                            | Default    | Purpose                                                                                                                                   |
+| ------------------- | --------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is the full JS-rendered DOM (use for Readability testing). |
+| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                              |
+| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.          |
+| `parsePdf`          | bool                              | `true`     | When enabled Firecrawl parses PDF files to markdown via `parsers: ["pdf"]`.                                                               |
+
+The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent).
 
 ### `docling`
 
@@ -124,11 +149,18 @@ The provider calls `/v2/scrape` and returns markdown plus an optional title. Ups
 config:
   baseUrl: ${DOCLING_BASE_URL}
   apiKey: ${DOCLING_API_KEY:-}
+  output: markdown
   doOcr: true
   tableMode: accurate
 ```
 
-The provider calls `POST /v1/convert/source` and returns markdown plus an optional title from the document's JSON name field. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
+| Knob        | Values               | Default    | Purpose                                                                                                                                                |
+| ----------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `output`    | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
+| `doOcr`     | bool                 | `true`     | Run OCR on scanned documents and images within PDFs.                                                                                                   |
+| `tableMode` | `fast` \| `accurate` | `accurate` | Table extraction quality. `accurate` is slower but better for complex layouts.                                                                         |
+
+The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name` (the JSON format is always requested internally regardless of the `output` setting). Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
 
 ## LLM Providers
 
@@ -183,7 +215,7 @@ Adjacent steps that share the same `concurrencyGroup` share one limiter acquisit
 
 ```yaml
 config:
-  provider: ${SOURCE_PROVIDER:-default-firecrawl}
+  provider: ${SOURCE_PROVIDER:-default-http}
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.

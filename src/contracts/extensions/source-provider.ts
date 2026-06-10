@@ -18,6 +18,7 @@ import type { ResolvedSourceProvider } from "./resolved-extension.js";
 export interface SourceDocument {
   readonly content: string;
   readonly title?: string;
+  readonly truncated?: boolean;
 }
 
 /** Defines the provider port for URL-to-markdown retrieval. */

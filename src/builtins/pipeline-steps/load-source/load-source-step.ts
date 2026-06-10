@@ -26,8 +26,10 @@ export class LoadSourceStep implements PipelineStep {
       const document = await this.deps.sourceProvider.load(ctx.input.url, { signal: ctx.signal });
       const content = document.content.trim();
       if (!content) return { status: "failed", reason: "empty" };
+
       return {
-        status: "ok",
+        status: document.truncated ? "degraded" : "ok",
+        reason: document.truncated ? "truncated" : undefined,
         diagnostics: document.title ? { attributes: { title: document.title } } : undefined,
         effects: { body: { content, title: document.title } }
       };

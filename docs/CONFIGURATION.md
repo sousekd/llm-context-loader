@@ -47,15 +47,17 @@ These are consumed by helper scripts and ignored by the Node app.
 
 The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
 
-The default pipeline cannot run without a source provider base URL, an OpenAI-compatible LLM base URL, and a model name. Compose enforces those values up front with required-variable interpolation. Direct Node startup enforces them during YAML substitution and provider config parsing.
+The default pipeline cannot run without an OpenAI-compatible LLM base URL and a model name. The default source provider (`default-http`) has no external service dependencies. Compose enforces required variables up front with required-variable interpolation. Direct Node startup enforces them during YAML substitution and provider config parsing.
 
 The placeholders below are grouped by the part of the pipeline they configure.
 
 ### Source provider selection
 
-| Variable          | Default / behavior  | Purpose                                                        |
-| ----------------- | ------------------- | -------------------------------------------------------------- |
-| `SOURCE_PROVIDER` | `default-firecrawl` | Named source provider used by the `load-source` pipeline step. |
+| Variable          | Default / behavior | Purpose                                                        |
+| ----------------- | ------------------ | -------------------------------------------------------------- |
+| `SOURCE_PROVIDER` | `default-http`     | Named source provider used by the `load-source` pipeline step. |
+
+The built-in `http` provider has no environment variables — it fetches the input URL directly.
 
 ### Source provider (Firecrawl)
 

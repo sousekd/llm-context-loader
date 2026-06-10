@@ -7,12 +7,13 @@
 
 import { z } from "zod";
 
-import { booleanStringAsBooleanOrUndefined } from "../../../shared/config-coercion.js";
+import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../../../shared/config-coercion.js";
 
 const doclingConfigSchema = z
   .object({
     baseUrl: z.string().url(),
     apiKey: z.string().default(""),
+    output: z.preprocess(emptyStringAsUndefined, z.enum(["markdown", "html"]).default("markdown")),
     doOcr: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
     tableMode: z.enum(["fast", "accurate"]).default("accurate")
   })

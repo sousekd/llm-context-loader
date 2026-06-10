@@ -18,7 +18,7 @@ x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML l
   OUTPUT_TARGET_CHARS: "${OUTPUT_TARGET_CHARS:-25000}"
 
   # Source provider.
-  SOURCE_PROVIDER: "${SOURCE_PROVIDER:-default-firecrawl}"
+  SOURCE_PROVIDER: "${SOURCE_PROVIDER:-default-http}"
   FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env or the shell}"
   FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
   DOCLING_BASE_URL: "${DOCLING_BASE_URL:?Set DOCLING_BASE_URL in .env or the shell}"

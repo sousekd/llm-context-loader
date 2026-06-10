@@ -39,6 +39,29 @@ describe("DoclingProvider", () => {
     expect(document).toEqual({ content: "# hello", title: "Hello" });
   });
 
+  it("returns html content when output is html", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    const fetchFn: typeof fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({
+        document: { html_content: "<p>Hello</p>", json_content: { name: "Hello" } },
+        status: "success",
+        processing_time: 0.5
+      });
+    };
+    const provider = new DoclingProvider(parseDoclingConfig({ baseUrl: "http://docling.example", output: "html" }), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(requestBody).toMatchObject({
+      options: { to_formats: ["html", "json"] }
+    });
+    expect(document).toEqual({ content: "<p>Hello</p>", title: "Hello" });
+  });
+
   it("accepts partial_success status and missing title", async () => {
     const provider = new DoclingProvider(parseDoclingConfig({ baseUrl: "http://docling.example" }), {
       httpFetch: async () =>
@@ -125,18 +148,40 @@ describe("DoclingProvider", () => {
     });
   });
 
-  it("rejects empty markdown as an upstream empty response", async () => {
-    const provider = new DoclingProvider(parseDoclingConfig({ baseUrl: "http://docling.example" }), {
-      httpFetch: async () =>
-        jsonResponse({
-          document: { md_content: "   " },
-          status: "success",
-          processing_time: 0.5
-        }),
-      logger: createTestLogger()
-    });
+  it("rejects empty content as an upstream empty response for any output", async () => {
+    const mdProvider = new DoclingProvider(
+      parseDoclingConfig({ baseUrl: "http://docling.example", output: "markdown" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            document: { md_content: "   " },
+            status: "success",
+            processing_time: 0.5
+          }),
+        logger: createTestLogger()
+      }
+    );
+    const htmlProvider = new DoclingProvider(
+      parseDoclingConfig({ baseUrl: "http://docling.example", output: "html" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            document: { html_content: "   " },
+            status: "success",
+            processing_time: 0.5
+          }),
+        logger: createTestLogger()
+      }
+    );
 
-    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
+    await expect(
+      mdProvider.load("https://example.com", { signal: new AbortController().signal })
+    ).rejects.toMatchObject({
+      upstreamCode: "empty"
+    });
+    await expect(
+      htmlProvider.load("https://example.com", { signal: new AbortController().signal })
+    ).rejects.toMatchObject({
       upstreamCode: "empty"
     });
   });

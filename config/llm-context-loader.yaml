@@ -28,19 +28,27 @@ outputRenderers:
 
 # Source providers turn an input URL into source markdown.
 sourceProviders:
+  default-http:
+    type: http
+    config:
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      maxBytes: 5000000
+      titleFromHtml: true
   default-firecrawl:
     type: firecrawl
     config:
       baseUrl: ${FIRECRAWL_BASE_URL}
       apiKey: ${FIRECRAWL_API_KEY:-}
+      output: markdown
       onlyMainContent: true
-      formats: [markdown]
-      maxAge: 0
+      stripBase64Images: true
+      parsePdf: true
   default-docling:
     type: docling
     config:
       baseUrl: ${DOCLING_BASE_URL}
       apiKey: ${DOCLING_API_KEY:-}
+      output: markdown
       doOcr: true
       tableMode: accurate
 
@@ -71,7 +79,7 @@ pipelines:
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: ${SOURCE_PROVIDER:-default-firecrawl}
+          provider: ${SOURCE_PROVIDER:-default-http}
       # Capture trusted source URLs before any LLM pass can alter the body.
       - type: capture-urls
         name: capture_source_urls

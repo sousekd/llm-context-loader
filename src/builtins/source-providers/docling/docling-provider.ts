@@ -23,6 +23,7 @@ const doclingResponseSchema = z
     document: z
       .object({
         md_content: z.string().nullable().optional(),
+        html_content: z.string().nullable().optional(),
         json_content: z
           .object({
             name: z.string().optional()
@@ -90,9 +91,13 @@ export class DoclingProvider implements SourceProvider {
         });
       }
 
-      const content = data.document?.md_content?.trim() ?? "";
+      const doc = data.document;
+      const rawContent = this.config.output === "html" ? doc?.html_content : doc?.md_content;
+      const content = rawContent?.trim() ?? "";
       if (!content)
-        throw new UpstreamError("Docling returned empty markdown", "empty", { upstreamStatus: response.status });
+        throw new UpstreamError(`Docling returned empty ${this.config.output}`, "empty", {
+          upstreamStatus: response.status
+        });
 
       const name = data.document?.json_content?.name;
       const title = typeof name === "string" && name.length > 0 ? name : undefined;
@@ -109,7 +114,7 @@ export class DoclingProvider implements SourceProvider {
     return {
       sources: [{ kind: "http", url }],
       options: {
-        to_formats: ["md", "json"],
+        to_formats: this.config.output === "html" ? ["html", "json"] : ["md", "json"],
         image_export_mode: "placeholder",
         do_ocr: this.config.doOcr,
         table_mode: this.config.tableMode

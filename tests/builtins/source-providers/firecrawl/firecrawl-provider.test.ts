@@ -20,9 +20,10 @@ describe("FirecrawlProvider", () => {
       parseFirecrawlConfig({
         baseUrl: "https://firecrawl.example",
         apiKey: "",
+        output: "markdown",
         onlyMainContent: false,
-        formats: ["markdown"],
-        maxAge: 0
+        stripBase64Images: true,
+        parsePdf: true
       }),
       { httpFetch: fetchFn, logger: createTestLogger() }
     );
@@ -33,20 +34,92 @@ describe("FirecrawlProvider", () => {
       url: "https://example.com",
       formats: ["markdown"],
       onlyMainContent: false,
-      maxAge: 0
+      removeBase64Images: true,
+      parsers: ["pdf"]
     });
     expect(document).toEqual({ content: "# hello", title: "Hello" });
   });
 
-  it("accepts top-level markdown response fields", async () => {
-    const provider = new FirecrawlProvider(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" }), {
-      httpFetch: async () => jsonResponse({ success: true, markdown: "# top", title: "Top" }),
-      logger: createTestLogger()
-    });
+  it("returns html content when output is html", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({ success: true, data: { html: "<p>Hello</p>", metadata: { title: "Hello" } } }),
+        logger: createTestLogger()
+      }
+    );
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: "# top", title: "Top" });
+    expect(document).toEqual({ content: "<p>Hello</p>", title: "Hello" });
+  });
+
+  it("returns rawHtml content when output is rawHtml", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, data: { rawHtml: "<html><body>Raw</body></html>" } }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toEqual({ content: "<html><body>Raw</body></html>" });
+  });
+
+  it("omits parsers when parsePdf is false", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    const fetchFn: typeof fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({ success: true, data: { markdown: "ok" } });
+    };
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(requestBody?.parsers).toEqual([]);
+  });
+
+  it("accepts top-level response fields for any output format", async () => {
+    const mdProvider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, markdown: "# top", title: "MdTop" }),
+        logger: createTestLogger()
+      }
+    );
+    const htmlProvider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, html: "<p>top</p>", title: "HtmlTop" }),
+        logger: createTestLogger()
+      }
+    );
+    const rawProvider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, rawHtml: "<html>raw</html>", title: "RawTop" }),
+        logger: createTestLogger()
+      }
+    );
+
+    await expect(mdProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
+      content: "# top",
+      title: "MdTop"
+    });
+    await expect(htmlProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
+      content: "<p>top</p>",
+      title: "HtmlTop"
+    });
+    await expect(rawProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
+      content: "<html>raw</html>",
+      title: "RawTop"
+    });
   });
 
   it("sends bearer authorization when an API key is configured", async () => {
@@ -82,13 +155,42 @@ describe("FirecrawlProvider", () => {
     });
   });
 
-  it("rejects empty markdown as an upstream empty response", async () => {
-    const provider = new FirecrawlProvider(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" }), {
-      httpFetch: async () => jsonResponse({ success: true, data: { markdown: "   " } }),
-      logger: createTestLogger()
-    });
+  it("rejects empty content as an upstream empty response for any output", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, data: { markdown: "   " } }),
+        logger: createTestLogger()
+      }
+    );
 
     await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
+      upstreamCode: "empty"
+    });
+
+    const htmlProvider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, data: { html: "   " } }),
+        logger: createTestLogger()
+      }
+    );
+    await expect(
+      htmlProvider.load("https://example.com", { signal: new AbortController().signal })
+    ).rejects.toMatchObject({
+      upstreamCode: "empty"
+    });
+
+    const rawProvider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" }),
+      {
+        httpFetch: async () => jsonResponse({ success: true, data: { rawHtml: "   " } }),
+        logger: createTestLogger()
+      }
+    );
+    await expect(
+      rawProvider.load("https://example.com", { signal: new AbortController().signal })
+    ).rejects.toMatchObject({
       upstreamCode: "empty"
     });
   });

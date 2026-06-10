@@ -7,15 +7,16 @@
 
 import { z } from "zod";
 
-import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../../../shared/config-coercion.js";
+import { booleanStringAsBooleanOrUndefined } from "../../../shared/config-coercion.js";
 
 const firecrawlConfigSchema = z
   .object({
     baseUrl: z.string().url(),
     apiKey: z.string().default(""),
+    output: z.enum(["markdown", "html", "rawHtml"]).default("markdown"),
     onlyMainContent: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
-    formats: z.array(z.string().min(1)).default(["markdown"]),
-    maxAge: z.preprocess(emptyStringAsUndefined, z.coerce.number().int().nonnegative().default(0))
+    stripBase64Images: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
+    parsePdf: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true))
   })
   .strict();
 
