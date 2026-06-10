@@ -82,14 +82,7 @@ if (-not $SkipHealthCheck) {
 $outDir = Join-Path $PSScriptRoot 'out'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-# Footer attributes worth surfacing in the console preview.
-$footerHighlights = @(
-    'returned', 'final_length',
-    'fetch_status', 'fetch_length',
-    'clean_status', 'clean_ratio', 'clean_reason',
-    'summarize_status', 'summarize_ratio', 'summarize_reason',
-    'truncate_status'
-)
+$footerRootHighlights = @('returned', 'result', 'final_length', 'ratio', 'duration_ms')
 
 Write-Host ("=== inspect {0} URLs ===" -f $Urls.Count) -ForegroundColor Cyan
 Write-Host ("loader   : {0}" -f $loader.LoaderBase) -ForegroundColor DarkGray
@@ -141,9 +134,17 @@ foreach ($url in $Urls) {
     if ($footerLine) {
         $attrs = Get-LoaderFooterAttrMap -Footer $footerLine
         Write-Host '  --- FOOTER ---'
-        foreach ($name in $footerHighlights) {
+        foreach ($name in $footerRootHighlights) {
             if ($attrs.ContainsKey($name)) {
                 Write-Host ("    {0,-18} {1}" -f $name, $attrs[$name])
+            }
+        }
+        $steps = Get-LoaderFooterSteps -Footer $footerLine
+        foreach ($step in $steps) {
+            if ($step.Status) {
+                $line = "    {0,-18} status={1}" -f $step.Name, $step.Status
+                if ($step.Reason) { $line += "  reason={0}" -f $step.Reason }
+                Write-Host $line
             }
         }
     }
