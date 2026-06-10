@@ -6,7 +6,7 @@ import type { OutputRenderer, OutputRendererInput } from "../../src/contracts/ex
 export function makeRenderInput(overrides: Partial<OutputRendererInput> = {}): OutputRendererInput {
   return {
     pipelineName: "test",
-    body: { content: "hello" },
+    body: { content: "hello", mediaType: "text/markdown" },
     signals: new Map(),
     artifacts: new Map(),
     report: {

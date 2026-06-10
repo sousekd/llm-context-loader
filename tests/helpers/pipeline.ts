@@ -16,7 +16,10 @@ export class StaticBodyStep implements PipelineStep {
   constructor(private readonly content: string) {}
 
   async run(_ctx: PipelineContext): Promise<StepResult> {
-    return { status: "ok", effects: { body: { content: this.content, title: "Test title" } } };
+    return {
+      status: "ok",
+      effects: { body: { content: this.content, mediaType: "text/markdown", title: "Test title" } }
+    };
   }
 }
 
@@ -91,7 +94,7 @@ export function makeStaticPipelineHandle(
 
 export function makePipelineResult(content = "hello"): PipelineRunResult {
   return {
-    body: { content, title: "Test title" },
+    body: { content, mediaType: "text/markdown", title: "Test title" },
     signals: new Map(),
     artifacts: new Map(),
     report: {

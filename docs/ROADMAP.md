@@ -48,10 +48,9 @@ Three cross-cutting changes enable the rest:
 
 The pivot above, sequenced so each step delivers value on its own and de-risks the next.
 
-1. **Content-typed body and fetch output formats.** Add a media type to the body and `SourceDocument`; let Firecrawl and Docling return HTML and tag it. This is the keystone everything else builds on.
-2. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
-3. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
-4. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and add fenced-code-block verification/repair for the summarize stage.
+1. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
+2. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
+3. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and add fenced-code-block verification/repair for the summarize stage.
 
 A couple of polish items ride along:
 

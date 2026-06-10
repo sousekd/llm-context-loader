@@ -17,6 +17,7 @@ import type { ResolvedSourceProvider } from "./resolved-extension.js";
 /** Represents a source URL document before pipeline processing. */
 export interface SourceDocument {
   readonly content: string;
+  readonly mediaType: string;
   readonly title?: string;
   readonly truncated?: boolean;
 }

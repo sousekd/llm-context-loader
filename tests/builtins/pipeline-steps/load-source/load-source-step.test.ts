@@ -10,7 +10,10 @@ import { makeStepContext } from "../utils.js";
 
 describe("LoadSourceStep", () => {
   it("skips when a body already exists", async () => {
-    const step = new LoadSourceStep({ sourceProvider: provider({ content: "new" }), logger: createTestLogger() });
+    const step = new LoadSourceStep({
+      sourceProvider: provider({ content: "new", mediaType: "text/markdown" }),
+      logger: createTestLogger()
+    });
 
     await expect(step.run(makeStepContext({ body: { content: "old" } }))).resolves.toMatchObject({
       status: "skipped",
@@ -20,19 +23,19 @@ describe("LoadSourceStep", () => {
 
   it("writes loaded content and title", async () => {
     const step = new LoadSourceStep({
-      sourceProvider: provider({ content: " markdown ", title: "Title" }),
+      sourceProvider: provider({ content: " markdown ", mediaType: "text/markdown", title: "Title" }),
       logger: createTestLogger()
     });
 
     const result = await step.run(makeStepContext());
 
     expect(result).toMatchObject({ status: "ok", diagnostics: { attributes: { title: "Title" } } });
-    expect(result.effects?.body).toEqual({ content: "markdown", title: "Title" });
+    expect(result.effects?.body).toEqual({ content: "markdown", mediaType: "text/markdown", title: "Title" });
   });
 
   it("degrades and still writes the body when the provider truncated content", async () => {
     const step = new LoadSourceStep({
-      sourceProvider: provider({ content: " markdown ", title: "Title", truncated: true }),
+      sourceProvider: provider({ content: " markdown ", mediaType: "text/markdown", title: "Title", truncated: true }),
       logger: createTestLogger()
     });
 
@@ -43,12 +46,12 @@ describe("LoadSourceStep", () => {
       reason: "truncated",
       diagnostics: { attributes: { title: "Title" } }
     });
-    expect(result.effects?.body).toEqual({ content: "markdown", title: "Title" });
+    expect(result.effects?.body).toEqual({ content: "markdown", mediaType: "text/markdown", title: "Title" });
   });
 
   it("stays ok when the provider reports truncated false", async () => {
     const step = new LoadSourceStep({
-      sourceProvider: provider({ content: "markdown", truncated: false }),
+      sourceProvider: provider({ content: "markdown", mediaType: "text/markdown", truncated: false }),
       logger: createTestLogger()
     });
 

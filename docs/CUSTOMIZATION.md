@@ -120,7 +120,7 @@ config:
 | `maxBytes`      | int    | `5000000`           | Response body size cap. The body is read as a stream and the connection is cancelled once the cap is reached, so memory stays bounded. When the cap truncates the body, the document is flagged truncated and the load-source step reports `degraded`. |
 | `titleFromHtml` | bool   | `true`              | When enabled, extracts the first `<title>` tag content from the HTML response.                                                                                                                                                                         |
 
-**Security caveat — testing only.** This provider fetches the input URL directly with no SSRF protection. It is intended as a zero-dependency testing fallback — no `baseUrl`, no `apiKey`, no external service required. Non-text responses (PDF, images, etc.) are rejected with `unsupported_media_type`; only textual content types are accepted. No JavaScript rendering is performed.
+**Security caveat — testing only.** This provider fetches the input URL directly with no SSRF protection. It is intended as a zero-dependency testing fallback — no `baseUrl`, no `apiKey`, no external service required. Non-text responses (PDF, images, etc.) are rejected with `unsupported_media_type`; only textual content types are accepted.
 
 ### `firecrawl`
 

@@ -18,6 +18,7 @@
  */
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
+import { isTextLike, mediaTypes } from "../../../shared/media-types.js";
 
 import type { SourceDocument, SourceProvider } from "../../../contracts/extensions/source-provider.js";
 import type { Logger } from "../../../shared/logger.js";
@@ -29,16 +30,6 @@ function extractTitle(html: string): string | undefined {
   if (!match) return undefined;
   const title = match[1].replace(/\s+/g, " ").trim();
   return title.length > 0 ? title : undefined;
-}
-
-/** Returns whether a content-type string is textual and safe to decode as UTF-8. */
-function isTextualContentType(contentType: string): boolean {
-  if (contentType.startsWith("text/")) return true;
-  return (
-    ["application/json", "application/xml", "application/xhtml+xml"].includes(contentType) ||
-    contentType.endsWith("+json") ||
-    contentType.endsWith("+xml")
-  );
 }
 
 /** Carries the bytes read from a response body and whether the byte cap forced truncation. */
@@ -118,12 +109,12 @@ export class HttpProvider implements SourceProvider {
         });
       }
 
-      const limited = await readLimitedBody(response, this.config.maxBytes);
-
-      const contentType = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-      if (contentType && !isTextualContentType(contentType)) {
-        throw new UpstreamError(`HTTP fetch returned non-text content type: ${contentType}`, "unsupported_media_type");
+      const mediaType = (response.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+      if (mediaType && !isTextLike(mediaType)) {
+        throw new UpstreamError(`HTTP fetch returned non-text content type: ${mediaType}`, "unsupported_media_type");
       }
+
+      const limited = await readLimitedBody(response, this.config.maxBytes);
       if (limited.bytes.includes(0)) {
         throw new UpstreamError("HTTP fetch returned binary content", "unsupported_media_type");
       }
@@ -138,7 +129,7 @@ export class HttpProvider implements SourceProvider {
 
       const title = this.config.titleFromHtml ? extractTitle(html) : undefined;
 
-      return { content, title, truncated: limited.truncated };
+      return { content, mediaType: mediaType || mediaTypes.plainText, title, truncated: limited.truncated };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

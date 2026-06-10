@@ -18,7 +18,7 @@ class EmittingStep implements PipelineStep {
     return {
       status: "ok",
       effects: {
-        body: { content: "hello" },
+        body: { content: "hello", mediaType: "text/markdown" },
         signals: { tone: "friendly", score: 7 },
         artifacts: { metrics: { tokens: 42 } }
       }

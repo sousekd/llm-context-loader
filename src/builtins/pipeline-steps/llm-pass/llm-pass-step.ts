@@ -61,7 +61,7 @@ export class LlmPassStep implements PipelineStep {
       );
       const text = result.text.trim();
       if (!text) return { status: "failed", reason: "empty_response" };
-      return { status: "ok", effects: { body: { content: text, title: body.title } } };
+      return { status: "ok", effects: { body: { content: text, mediaType: body.mediaType, title: body.title } } };
     } catch (error) {
       return classifyLlmPassFailure(error);
     }

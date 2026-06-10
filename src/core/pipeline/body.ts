@@ -17,10 +17,10 @@ export class BodyStore implements BodyView {
     this.bodyVersions.push({ ...version });
   }
 
-  /** Returns the current markdown body, if any. */
+  /** Returns the current content-typed body, if any. */
   current(): BodyContent | undefined {
     const latest = this.bodyVersions.at(-1);
-    return latest ? { content: latest.content, title: latest.title } : undefined;
+    return latest ? { content: latest.content, mediaType: latest.mediaType, title: latest.title } : undefined;
   }
 
   /** Returns an immutable snapshot of all body versions. */

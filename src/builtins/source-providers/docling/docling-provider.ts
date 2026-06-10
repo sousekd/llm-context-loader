@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
+import { mediaTypes } from "../../../shared/media-types.js";
 import { joinUrl } from "../../../shared/urls.js";
 
 import type { SourceDocument, SourceProvider } from "../../../contracts/extensions/source-provider.js";
@@ -101,8 +102,9 @@ export class DoclingProvider implements SourceProvider {
 
       const name = data.document?.json_content?.name;
       const title = typeof name === "string" && name.length > 0 ? name : undefined;
+      const mediaType: string = this.config.output === "html" ? mediaTypes.html : mediaTypes.markdown;
 
-      return { content, title };
+      return { content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

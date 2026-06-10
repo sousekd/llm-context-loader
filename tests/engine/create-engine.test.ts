@@ -74,6 +74,9 @@ const staticBodyStepDescriptor = {
   type: "static-body",
   parseConfig: raw => raw as { content: string },
   create: ({ config }) => ({
-    run: async () => ({ status: "ok" as const, effects: { body: { content: config.content } } })
+    run: async () => ({
+      status: "ok" as const,
+      effects: { body: { content: config.content, mediaType: "text/markdown" } }
+    })
   })
 } satisfies PipelineStepDescriptor<{ content: string }>;

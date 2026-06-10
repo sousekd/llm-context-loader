@@ -82,7 +82,9 @@ export class VerifyUrlsStep implements PipelineStep {
       return {
         status: "degraded",
         reason: "hallucinated_urls",
-        effects: { body: { content: rollbackTarget.content, title: rollbackTarget.title } },
+        effects: {
+          body: { content: rollbackTarget.content, mediaType: rollbackTarget.mediaType, title: rollbackTarget.title }
+        },
         diagnostics
       };
     }

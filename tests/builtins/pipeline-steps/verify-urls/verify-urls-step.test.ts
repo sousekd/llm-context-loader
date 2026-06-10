@@ -86,6 +86,7 @@ describe("VerifyUrlsStep", () => {
     expect(result.reason).toBe("hallucinated_urls");
     expect(result.effects?.body).toEqual({
       content: "Original body with [good](https://example.com/good)",
+      mediaType: "text/markdown",
       title: "Title"
     });
     expect(result.effects?.artifacts).toBeUndefined();

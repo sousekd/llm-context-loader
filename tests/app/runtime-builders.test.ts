@@ -255,7 +255,7 @@ describe("descriptor builders", () => {
 });
 
 function sourceProvider(): SourceProvider {
-  return { load: async () => ({ content: "source" }) };
+  return { load: async () => ({ content: "source", mediaType: "text/markdown" }) };
 }
 
 function resourceLoader() {

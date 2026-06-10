@@ -8,11 +8,11 @@ describe("BodyStore", () => {
   it("tracks current body and immutable version snapshots", () => {
     const body = new BodyStore();
 
-    body.append({ stepName: "fetch", content: "source", title: "Title" });
-    body.append({ stepName: "clean", content: "clean", title: "Title" });
+    body.append({ stepName: "fetch", content: "source", mediaType: "text/markdown", title: "Title" });
+    body.append({ stepName: "clean", content: "clean", mediaType: "text/markdown", title: "Title" });
     const versions = body.versions();
 
-    expect(body.current()).toEqual({ content: "clean", title: "Title" });
+    expect(body.current()).toEqual({ content: "clean", mediaType: "text/markdown", title: "Title" });
     expect(versions.map(version => version.stepName)).toEqual(["fetch", "clean"]);
     expect(versions).not.toBe(body.versions());
   });
@@ -27,7 +27,7 @@ describe("applyStepEffects", () => {
       {
         status: "ok",
         effects: {
-          body: { content: "source" },
+          body: { content: "source", mediaType: "text/markdown" },
           signals: { "feature.enabled": true },
           artifacts: { "feature.payload": { value: 1 } }
         }
@@ -36,7 +36,7 @@ describe("applyStepEffects", () => {
     );
 
     expect(summary).toEqual({ outputChars: 6, wroteBody: true });
-    expect(state.body.current()).toEqual({ content: "source", title: undefined });
+    expect(state.body.current()).toEqual({ content: "source", mediaType: "text/markdown", title: undefined });
     expect(state.signals.get("feature.enabled")).toBe(true);
     expect(state.artifacts.get("feature.payload")).toEqual({ value: 1 });
 
@@ -52,7 +52,7 @@ describe("applyStepEffects", () => {
 
   it("applies body, signal, and artifact effects for degraded results", () => {
     const state = { body: new BodyStore(), signals: new Map(), artifacts: new Map() };
-    state.body.append({ stepName: "fetch", content: "source", title: "Title" });
+    state.body.append({ stepName: "fetch", content: "source", mediaType: "text/markdown", title: "Title" });
     state.signals.set("feature.enabled", true);
     state.artifacts.set("feature.payload", { value: 1 });
 
@@ -62,7 +62,7 @@ describe("applyStepEffects", () => {
         status: "degraded",
         reason: "hallucinated_urls",
         effects: {
-          body: { content: "source", title: "Title" },
+          body: { content: "source", mediaType: "text/markdown", title: "Title" },
           signals: { "feature.enabled": null },
           artifacts: { "feature.payload": null }
         }
@@ -78,7 +78,7 @@ describe("applyStepEffects", () => {
 
   it("ignores effects on failed results", () => {
     const state = { body: new BodyStore(), signals: new Map(), artifacts: new Map() };
-    state.body.append({ stepName: "fetch", content: "source", title: "Title" });
+    state.body.append({ stepName: "fetch", content: "source", mediaType: "text/markdown", title: "Title" });
     state.signals.set("feature.enabled", true);
     state.artifacts.set("feature.payload", { value: 1 });
 
@@ -88,7 +88,7 @@ describe("applyStepEffects", () => {
         status: "failed",
         reason: "hallucinated_urls",
         effects: {
-          body: { content: "replaced", title: "Title" },
+          body: { content: "replaced", mediaType: "text/markdown", title: "Title" },
           signals: { "feature.enabled": null },
           artifacts: { "feature.payload": null }
         }
@@ -111,7 +111,7 @@ describe("applyStepEffects", () => {
         status: "skipped",
         reason: "no_body",
         effects: {
-          body: { content: "ignored" },
+          body: { content: "ignored", mediaType: "text/markdown" },
           signals: { "feature.enabled": true },
           artifacts: { "feature.payload": { value: 1 } }
         }

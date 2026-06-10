@@ -36,7 +36,7 @@ describe("LlmPassStep", () => {
     const result = await step.run(makeStepContext({ body: { content: "source text", title: "Title" } }));
 
     expect(result.status).toBe("ok");
-    expect(result.effects?.body).toEqual({ content: "cleaned", title: "Title" });
+    expect(result.effects?.body).toEqual({ content: "cleaned", mediaType: "text/markdown", title: "Title" });
     expect(JSON.stringify(calls[0])).toContain("source text");
   });
 

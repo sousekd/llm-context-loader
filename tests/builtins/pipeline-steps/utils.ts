@@ -3,10 +3,17 @@ import type { BodyContent, PipelineContext, ScalarValue } from "../../../src/con
 import { BodyStore } from "../../../src/core/pipeline/body.js";
 import { ReadonlyArtifactBag, ReadonlySignalBag } from "../../../src/core/pipeline/context.js";
 
+/** Body fragment that makes mediaType optional for test ergonomics. */
+type BodyInput = { readonly content: string; readonly mediaType?: string; readonly title?: string };
+
+function normalize(body: BodyInput, mediaType: string): BodyContent {
+  return { content: body.content, mediaType: body.mediaType ?? mediaType, title: body.title };
+}
+
 export function makeStepContext(
   args: {
-    readonly body?: BodyContent;
-    readonly bodyVersions?: ReadonlyArray<{ readonly stepName: string } & BodyContent>;
+    readonly body?: BodyInput;
+    readonly bodyVersions?: ReadonlyArray<{ readonly stepName: string } & BodyInput>;
     readonly signal?: AbortSignal;
     readonly signals?: ReadonlyMap<string, ScalarValue>;
     readonly artifacts?: ReadonlyMap<string, unknown>;
@@ -15,9 +22,10 @@ export function makeStepContext(
 ): PipelineContext {
   const body = new BodyStore();
   if (args.bodyVersions) {
-    for (const version of args.bodyVersions) body.append({ ...version });
+    for (const version of args.bodyVersions)
+      body.append({ stepName: version.stepName, ...normalize(version, "text/markdown") });
   } else if (args.body) {
-    body.append({ stepName: "source", ...args.body });
+    body.append({ stepName: "source", ...normalize(args.body, "text/markdown") });
   }
   return {
     input: { url: args.url ?? "https://example.com/" },

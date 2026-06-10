@@ -20,7 +20,12 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: expect.stringContaining("Hello"), title: "My Page", truncated: false });
+    expect(document).toEqual({
+      content: expect.stringContaining("Hello"),
+      mediaType: "text/plain",
+      title: "My Page",
+      truncated: false
+    });
   });
 
   it("omits title when titleFromHtml is false", async () => {
@@ -32,7 +37,7 @@ describe("HttpProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: expect.stringContaining("Test"), truncated: false });
+    expect(document).toEqual({ content: expect.stringContaining("Test"), mediaType: "text/plain", truncated: false });
   });
 
   it("sets the configured user agent", async () => {
@@ -162,6 +167,31 @@ describe("HttpProvider", () => {
     });
   });
 
+  it("rejects explicit non-text content type before reading the body", async () => {
+    let readAttempted = false;
+    const response = {
+      ok: true,
+      status: 200,
+      headers: new Headers({ "content-type": "application/pdf" }),
+      body: {
+        getReader() {
+          readAttempted = true;
+          throw new Error("body should not be read");
+        }
+      }
+    } as unknown as Response;
+    const fetchFn: typeof fetch = async () => response;
+    const provider = new HttpProvider(parseHttpConfig({}), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
+      upstreamCode: "unsupported_media_type"
+    });
+    expect(readAttempted).toBe(false);
+  });
+
   it("rejects application/octet-stream with a NUL byte as unsupported media type", async () => {
     const fetchFn: typeof fetch = async () =>
       new Response(new Uint8Array([104, 105, 0, 101]), {
@@ -204,9 +234,26 @@ describe("HttpProvider", () => {
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(document.content).toContain("Hello");
+    expect(document.mediaType).toBe("text/html");
   });
 
-  it("accepts application/json content type", async () => {
+  it("returns text/markdown for text/markdown content type", async () => {
+    const fetchFn: typeof fetch = async () =>
+      new Response("# Markdown body", {
+        status: 200,
+        headers: { "content-type": "text/markdown" }
+      });
+    const provider = new HttpProvider(parseHttpConfig({}), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.mediaType).toBe("text/markdown");
+  });
+
+  it("preserves application/json content type", async () => {
     const fetchFn: typeof fetch = async () =>
       new Response('{"key": "value"}', {
         status: 200,
@@ -220,6 +267,39 @@ describe("HttpProvider", () => {
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(document.content).toBe('{"key": "value"}');
+    expect(document.mediaType).toBe("application/json");
+  });
+
+  it("preserves other textual content types (no collapse to text/plain)", async () => {
+    const fetchFn: typeof fetch = async () =>
+      new Response("css", {
+        status: 200,
+        headers: { "content-type": "text/css" }
+      });
+    const provider = new HttpProvider(parseHttpConfig({}), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.mediaType).toBe("text/css");
+  });
+
+  it("preserves structured +xml content types", async () => {
+    const fetchFn: typeof fetch = async () =>
+      new Response("<rss><channel /></rss>", {
+        status: 200,
+        headers: { "content-type": "application/rss+xml; charset=utf-8" }
+      });
+    const provider = new HttpProvider(parseHttpConfig({}), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.mediaType).toBe("application/rss+xml");
   });
 
   it("accepts clean text with no content-type header", async () => {

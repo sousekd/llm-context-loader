@@ -32,7 +32,7 @@ export class TruncateStep implements PipelineStep {
     const truncated = truncateToBudget(body.content, this.config.targetChars);
     return {
       status: "ok",
-      effects: { body: { content: truncated, title: body.title } }
+      effects: { body: { content: truncated, mediaType: body.mediaType, title: body.title } }
     };
   }
 }

@@ -31,7 +31,7 @@ export class LoadSourceStep implements PipelineStep {
         status: document.truncated ? "degraded" : "ok",
         reason: document.truncated ? "truncated" : undefined,
         diagnostics: document.title ? { attributes: { title: document.title } } : undefined,
-        effects: { body: { content, title: document.title } }
+        effects: { body: { content, mediaType: document.mediaType, title: document.title } }
       };
     } catch (error) {
       return classifySourceLoadFailure(error);

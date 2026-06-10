@@ -80,7 +80,7 @@ describe("default engine descriptor bundle", () => {
 });
 
 function sourceProvider(): SourceProvider {
-  return { load: async () => ({ content: "source" }) };
+  return { load: async () => ({ content: "source", mediaType: "text/markdown" }) };
 }
 
 function llmProvider(): LlmProvider {

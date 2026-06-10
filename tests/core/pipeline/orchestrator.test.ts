@@ -38,7 +38,12 @@ class BodyEchoStep implements PipelineStep {
 
   async run(ctx: PipelineContext): Promise<StepResult> {
     const body = ctx.body.current();
-    return { status: "ok", effects: { body: { content: `${body?.content ?? ""}!`, title: body?.title } } };
+    return {
+      status: "ok",
+      effects: {
+        body: { content: `${body?.content ?? ""}!`, mediaType: body?.mediaType ?? "text/markdown", title: body?.title }
+      }
+    };
   }
 }
 
@@ -98,7 +103,13 @@ describe("PipelineOrchestrator", () => {
   it("ignores effects on skipped results and reports degraded fallback", async () => {
     const pipeline = makePipeline({
       steps: [
-        withMeta(new FakeStep("fetch", { status: "ok", effects: { body: { content: "source", title: "Title" } } }), 5),
+        withMeta(
+          new FakeStep("fetch", {
+            status: "ok",
+            effects: { body: { content: "source", mediaType: "text/markdown", title: "Title" } }
+          }),
+          5
+        ),
         withMeta(new FakeStep("clean", { status: "failed", reason: "network" }), 5),
         withMeta(new BodyEchoStep(), 5)
       ]
@@ -106,7 +117,7 @@ describe("PipelineOrchestrator", () => {
 
     const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
 
-    expect(result.body).toEqual({ content: "source!", title: "Title" });
+    expect(result.body).toEqual({ content: "source!", mediaType: "text/markdown", title: "Title" });
     expect(result.report.result).toBe("degraded");
     expect(result.report.initialChars).toBe(6);
     expect(result.report.finalChars).toBe(7);
@@ -118,12 +129,18 @@ describe("PipelineOrchestrator", () => {
   it("applies body effects on degraded results and rolls the run up as degraded", async () => {
     const pipeline = makePipeline({
       steps: [
-        withMeta(new FakeStep("fetch", { status: "ok", effects: { body: { content: "source", title: "Title" } } }), 5),
+        withMeta(
+          new FakeStep("fetch", {
+            status: "ok",
+            effects: { body: { content: "source", mediaType: "text/markdown", title: "Title" } }
+          }),
+          5
+        ),
         withMeta(
           new FakeStep("verify", {
             status: "degraded",
             reason: "hallucinated_urls",
-            effects: { body: { content: "source", title: "Title" } }
+            effects: { body: { content: "source", mediaType: "text/markdown", title: "Title" } }
           }),
           5
         )
@@ -132,7 +149,7 @@ describe("PipelineOrchestrator", () => {
 
     const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
 
-    expect(result.body).toEqual({ content: "source", title: "Title" });
+    expect(result.body).toEqual({ content: "source", mediaType: "text/markdown", title: "Title" });
     expect(result.report.result).toBe("degraded");
     expect(result.report.returned).toBe("verify");
     expect(result.report.bodyChangedBy).toBe("verify");
@@ -148,12 +165,18 @@ describe("PipelineOrchestrator", () => {
   it("ignores effects on failed results and rolls the run up as degraded", async () => {
     const pipeline = makePipeline({
       steps: [
-        withMeta(new FakeStep("fetch", { status: "ok", effects: { body: { content: "source", title: "Title" } } }), 5),
+        withMeta(
+          new FakeStep("fetch", {
+            status: "ok",
+            effects: { body: { content: "source", mediaType: "text/markdown", title: "Title" } }
+          }),
+          5
+        ),
         withMeta(
           new FakeStep("verify", {
             status: "failed",
             reason: "hallucinated_urls",
-            effects: { body: { content: "rewritten", title: "Title" } }
+            effects: { body: { content: "rewritten", mediaType: "text/markdown", title: "Title" } }
           }),
           5
         )
@@ -162,7 +185,7 @@ describe("PipelineOrchestrator", () => {
 
     const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
 
-    expect(result.body).toEqual({ content: "source", title: "Title" });
+    expect(result.body).toEqual({ content: "source", mediaType: "text/markdown", title: "Title" });
     expect(result.report.result).toBe("degraded");
     expect(result.report.bodyChangedBy).toBe("fetch");
     expect(result.report.steps[1]).toMatchObject({
@@ -180,7 +203,7 @@ describe("PipelineOrchestrator", () => {
           new FakeStep("fetch", {
             status: "ok",
             diagnostics: { children: [{ name: "attempt", attributes: { count: 1 } }] },
-            effects: { body: { content: "source" } }
+            effects: { body: { content: "source", mediaType: "text/markdown" } }
           }),
           5
         )

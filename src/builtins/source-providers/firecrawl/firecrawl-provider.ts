@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
+import { mediaTypes } from "../../../shared/media-types.js";
 import { joinUrl } from "../../../shared/urls.js";
 
 import type { SourceDocument, SourceProvider } from "../../../contracts/extensions/source-provider.js";
@@ -92,7 +93,8 @@ export class FirecrawlProvider implements SourceProvider {
           upstreamStatus: response.status
         });
       const title = data.title ?? (typeof metadata.title === "string" ? metadata.title : undefined);
-      return { content, title };
+      const mediaType: string = this.config.output === "markdown" ? mediaTypes.markdown : mediaTypes.html;
+      return { content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

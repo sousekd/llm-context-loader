@@ -37,7 +37,7 @@ describe("FirecrawlProvider", () => {
       removeBase64Images: true,
       parsers: ["pdf"]
     });
-    expect(document).toEqual({ content: "# hello", title: "Hello" });
+    expect(document).toEqual({ content: "# hello", mediaType: "text/markdown", title: "Hello" });
   });
 
   it("returns html content when output is html", async () => {
@@ -52,7 +52,7 @@ describe("FirecrawlProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: "<p>Hello</p>", title: "Hello" });
+    expect(document).toEqual({ content: "<p>Hello</p>", mediaType: "text/html", title: "Hello" });
   });
 
   it("returns rawHtml content when output is rawHtml", async () => {
@@ -66,7 +66,7 @@ describe("FirecrawlProvider", () => {
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(document).toEqual({ content: "<html><body>Raw</body></html>" });
+    expect(document).toEqual({ content: "<html><body>Raw</body></html>", mediaType: "text/html" });
   });
 
   it("omits parsers when parsePdf is false", async () => {
@@ -110,14 +110,17 @@ describe("FirecrawlProvider", () => {
 
     await expect(mdProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
       content: "# top",
+      mediaType: "text/markdown",
       title: "MdTop"
     });
     await expect(htmlProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
       content: "<p>top</p>",
+      mediaType: "text/html",
       title: "HtmlTop"
     });
     await expect(rawProvider.load("https://example.com", { signal: new AbortController().signal })).resolves.toEqual({
       content: "<html>raw</html>",
+      mediaType: "text/html",
       title: "RawTop"
     });
   });

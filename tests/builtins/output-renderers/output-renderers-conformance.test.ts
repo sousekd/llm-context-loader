@@ -19,7 +19,7 @@ describe("built-in output renderers", () => {
       { logger: createTestLogger() }
     );
 
-    const output = renderer.render(makeRenderInput({ body: { content: "hello" } }));
+    const output = renderer.render(makeRenderInput({ body: { content: "hello", mediaType: "text/markdown" } }));
 
     expect(output.markdown).toContain("hello\n\n<loader_info");
     expect(output.markdown).toContain('result="ok"');

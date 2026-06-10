@@ -18,9 +18,10 @@ import type { StepOutcome } from "./report.js";
  */
 export type ScalarValue = string | number | boolean;
 
-/** Represents markdown body content and its optional title. */
+/** Represents a content-typed body and its optional title. */
 export interface BodyContent {
   readonly content: string;
+  readonly mediaType: string;
   readonly title?: string;
 }
 
