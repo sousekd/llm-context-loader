@@ -41,12 +41,11 @@ The URL-in / clean-Markdown-within-a-budget contract does not change. What chang
 ## Coming soon
 
 1. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
-2. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and off by default. Keep summarize.
-3. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and add fenced-code-block verification/repair for the summarize stage.
+2. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and only execute it for URLs where deterministic clean did not produce desired results. Keep summarize.
+3. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and implement fenced-code-block verification/repair.
 
 A couple of polish items ride along:
 
-- **Configuration validation redesign.** Today every configured provider and step is constructed eagerly at compose time, so an unused source provider still requires its base URL and an unused LLM provider still requires its model. Redesign so providers and steps validate their config only when the active pipeline references them.
 - **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
 - **Better defaults and prompts.** Test and tune the shipped defaults and prompts.
 
@@ -54,8 +53,8 @@ A couple of polish items ride along:
 
 Near-term additions once the pivot above settles.
 
-- **Playwright fetch provider (HTML/DOM)** to remove the hard dependency on a running Firecrawl or Docling instance for HTML pages.
-- **`ContentTransformer` provider category.** Once a second extractor or converter implementation exists, promote the transform steps into a named provider category so the choice is plug-and-play in YAML. Candidate implementations: Readability, node-html-markdown, Turndown, and Trafilatura behind a small service.
+- **Playwright fetch provider (HTML/DOM)** to remove the hard dependency on a running Firecrawl instance for HTML pages.
+- **Docling for document conversion.** Use Docling to convert PDFs, Office documents, and other document-type files to markdown.
 
 ## Mid term
 

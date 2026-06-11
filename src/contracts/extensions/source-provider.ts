@@ -57,7 +57,7 @@ export interface SourceProviderCreateArgs<TConfig = unknown> {
 export interface SourceProviderDescriptor<TConfig = unknown> {
   readonly type: string;
   parseConfig(raw: unknown): TConfig;
-  create(args: SourceProviderCreateArgs<TConfig>): SourceProvider | Promise<SourceProvider>;
+  create(args: SourceProviderCreateArgs<TConfig>): SourceProvider;
 }
 
 /** Identifies the source provider registry extension service. */

@@ -17,6 +17,7 @@ describe("createEngine", () => {
         outputRenderers: { markdown: { type: "markdown", config: {} } },
         pipelines: {
           default: {
+            enabled: true,
             outputRenderer: "markdown",
             limiters: {},
             steps: [{ type: "static-body", name: "write_body", timeoutSeconds: 5, config: { content: "hello engine" } }]

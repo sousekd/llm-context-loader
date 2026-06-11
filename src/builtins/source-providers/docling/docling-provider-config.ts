@@ -11,7 +11,7 @@ import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../..
 
 const doclingConfigSchema = z
   .object({
-    baseUrl: z.string().url(),
+    baseUrl: z.string().min(1, "docling baseUrl is required").url("docling baseUrl must be a valid URL"),
     apiKey: z.string().default(""),
     output: z.preprocess(emptyStringAsUndefined, z.enum(["markdown", "html"]).default("markdown")),
     doOcr: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),

@@ -61,7 +61,7 @@ export interface LlmProviderCreateArgs<TConfig = unknown> {
 export interface LlmProviderDescriptor<TConfig = unknown> {
   readonly type: string;
   parseConfig(raw: unknown): TConfig;
-  create(args: LlmProviderCreateArgs<TConfig>): LlmProvider | Promise<LlmProvider>;
+  create(args: LlmProviderCreateArgs<TConfig>): LlmProvider;
 }
 
 /** Identifies the LLM provider registry extension service. */

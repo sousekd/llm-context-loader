@@ -7,18 +7,14 @@
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-22+-brightgreen.svg)](https://nodejs.org/)
 
-LLM Context Loader is a small HTTP service that turns URLs into markdown suitable for language-model context. The default bundle exposes an Open WebUI external web loader endpoint and a limited Jina Reader-style endpoint, fetches pages through Firecrawl, can run OpenAI-compatible Chat Completions passes, and renders either plain markdown or markdown with an XML diagnostic footer.
+LLM Context Loader is a small HTTP service that turns URLs into markdown for LLM context. It exposes Open WebUI and Jina Reader-style HTTP endpoints, fetches pages through built-in or external providers, can run LLM passes, and renders markdown with an optional XML diagnostic footer. It handles single URLs — crawling, search, model serving, storage, and retrieval stay outside this tool.
 
 ## Current Shape
 
-- HTTP adapters: Open WebUI `POST /`, Jina-style `GET /r/<url>` and `GET /r?url=<url>`, plus open `GET /health`.
-- Source provider: Firecrawl `/v2/scrape` with markdown output.
-- LLM provider: lowest-common-denominator OpenAI-compatible `/chat/completions` using `system` and `user` messages.
-- Default pipeline: load the page, clean it with an LLM pass, summarize it when it is too long, cap the output size.
-- LLM passes are guarded by URL-hallucination detection that rolls back to trusted source content.
-- Output renderers: `debug-xml` and `passthrough`, selected per pipeline in YAML.
-
-It fetches and shapes single URLs; crawling, search, model serving, storage, and retrieval stay outside this tool.
+- **Pipelines:** `truncate` (default, no LLM) and `clean-llm` (Firecrawl + LLM), selected via `DEFAULT_PIPELINE`.
+- **Source providers:** native HTTP fetch, Firecrawl, Docling.
+- **LLM provider:** OpenAI-compatible `/chat/completions`.
+- **Output renderers:** `debug-xml` and `passthrough`, selected per pipeline in YAML.
 
 ## Quick Start
 
@@ -27,7 +23,6 @@ Requires Node 22+ for local runs.
 ```bash
 npm install
 cp .env.example .env
-# edit .env for FIRECRAWL_BASE_URL, LLM_BASE_URL, LLM_MODEL, and keys if needed
 npm run dev
 ```
 
@@ -68,7 +63,7 @@ docker compose -f compose.deploy.yaml up -d
 
 The deploy compose file requires `LLMC_IMAGE_TAG`. The example env file uses `latest`, but repeatable deployments should pin it to an immutable release tag.
 
-The provider values in `.env.example` are placeholders. Set `FIRECRAWL_BASE_URL`, `LLM_BASE_URL`, and `LLM_MODEL` before starting the service; the Compose files fail early if they are missing. If Firecrawl or the LLM server runs on the host machine, remember that `localhost` inside a container means the container itself. Use a LAN address or `host.docker.internal` when appropriate.
+The out-of-box `truncate` pipeline needs no provider config. Switch to `clean-llm` with `DEFAULT_PIPELINE=clean-llm` and the appropriate provider vars. The Compose files pass all variables through without failing early; the service validates only the active pipeline's providers at startup. If Firecrawl or the LLM server runs on the host, use a LAN address or `host.docker.internal` instead of `localhost`.
 
 ## API
 

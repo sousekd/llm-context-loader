@@ -167,10 +167,12 @@ Bootstrap environment is intentionally small and parsed by `src/config/env-confi
 The YAML document is translated to `AppConfig` before runtime construction:
 
 1. `src/config/yaml/yaml-config.ts` validates the coarse YAML shape: `httpAdapters`, `outputRenderers`, `sourceProviders`, `llmProviders`, and `pipelines`.
-2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata.
+2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata. Pipeline activation follows a tri-state `enabled`: `true` compiles, `false` parks it, **omitted** activates only when an HTTP adapter references it.
 3. Each built-in descriptor parses its own `config` block with a local schema during engine or adapter construction.
 
-YAML environment substitution happens before schema validation. See [CONFIGURATION.md](CONFIGURATION.md) for default operation and [CUSTOMIZATION.md](CUSTOMIZATION.md) for YAML structure.
+YAML environment substitution happens before schema validation. A missing `${VAR}` with no `:-` default resolves to `""` so the env layer never throws for unused config. Required-ness is owned by reachable built-in schemas, not by substitution.
+
+**Lazy validation**: providers and output renderers are built and validated only when an active pipeline references them. An unused provider with missing env vars does not fail startup.
 
 `EngineConfig` excludes adapter declarations and schema metadata. `AppConfig` is the app-level envelope that pairs `engineConfig` with adapter configuration such as `adapters.http`.
 

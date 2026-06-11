@@ -45,7 +45,7 @@ describe("composeApp", () => {
         logger: createTestLogger(),
         httpFetch: fetch
       })
-    ).rejects.toThrow("required env FIRECRAWL_BASE_URL not set");
+    ).rejects.toThrow("Invalid config for source provider 'default-firecrawl'");
 
     const missingTemplate = await writeConfigFixture(defaultYaml(), false);
     await expect(

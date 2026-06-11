@@ -47,7 +47,12 @@ These are consumed by helper scripts and ignored by the Node app.
 
 The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
 
-The default pipeline cannot run without an OpenAI-compatible LLM base URL and a model name. The default source provider (`default-http`) has no external service dependencies. Compose enforces required variables up front with required-variable interpolation. Direct Node startup enforces them during YAML substitution and provider config parsing.
+The default (`truncate`) pipeline needs no provider configuration — it fetches and truncates. The `clean-llm` pipeline uses an LLM and Firecrawl; those env vars are
+required only when `clean-llm` is active (set `DEFAULT_PIPELINE=clean-llm`).
+
+Validation is lazy: the service validates and constructs only the providers and pipelines that
+are reachable from the active configuration. An unused provider with missing env vars will not
+fail startup.
 
 The placeholders below are grouped by the part of the pipeline they configure.
 
@@ -61,52 +66,52 @@ The built-in `http` provider has no environment variables — it fetches the inp
 
 ### Source provider (Firecrawl)
 
-| Variable             | Default / behavior | Purpose                          |
-| -------------------- | ------------------ | -------------------------------- |
-| `FIRECRAWL_BASE_URL` | Required           | Firecrawl base URL.              |
-| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token. |
+| Variable             | Default / behavior | Purpose                                                                                      |
+| -------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
+| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required only when a pipeline referencing `default-firecrawl` is active. |
+| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                             |
 
 ### Source provider (Docling)
 
-| Variable           | Default / behavior | Purpose                   |
-| ------------------ | ------------------ | ------------------------- |
-| `DOCLING_BASE_URL` | Required           | Docling Serve base URL.   |
-| `DOCLING_API_KEY`  | empty              | Optional Docling API key. |
+| Variable           | Default / behavior | Purpose                                                                                        |
+| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
+| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `default-docling` is active. |
+| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                      |
 
 ### LLM provider (OpenAI-compatible)
 
-| Variable                   | Default / behavior | Purpose                                                                       |
-| -------------------------- | ------------------ | ----------------------------------------------------------------------------- |
-| `LLM_BASE_URL`             | Required           | OpenAI-compatible API base URL, usually ending in `/v1`.                      |
-| `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                    |
-| `LLM_MODEL`                | Required           | Model identifier sent to chat completions.                                    |
-| `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate. |
-| `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.         |
-| `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.          |
+| Variable                   | Default / behavior | Purpose                                                                                                                     |
+| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required only when a pipeline referencing `default-llm` is active. |
+| `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                                                                  |
+| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required only when a pipeline referencing `default-llm` is active.               |
+| `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate.                                               |
+| `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.                                                       |
+| `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.                                                        |
 
 ### Pipeline output and step thresholds
 
-| Variable                      | Default / behavior | Purpose                                                      |
-| ----------------------------- | ------------------ | ------------------------------------------------------------ |
-| `OUTPUT_TARGET_CHARS`         | `25000`            | Desired maximum characters returned by the default pipeline. |
-| `LOAD_SOURCE_TIMEOUT_SECONDS` | `20`               | Per-call timeout for the source-loading step.                |
-| `CLEAN_MIN_INPUT_CHARS`       | `1000`             | Minimum body characters before the clean LLM pass runs.      |
-| `CLEAN_TIMEOUT_SECONDS`       | `60`               | Per-call timeout for the clean LLM pass.                     |
-| `SUMMARIZE_TIMEOUT_SECONDS`   | `60`               | Per-call timeout for the summarize LLM pass.                 |
+| Variable                      | Default / behavior | Purpose                                                     |
+| ----------------------------- | ------------------ | ----------------------------------------------------------- |
+| `OUTPUT_TARGET_CHARS`         | `25000`            | Desired maximum characters returned by the active pipeline. |
+| `LOAD_SOURCE_TIMEOUT_SECONDS` | `20`               | Per-call timeout for the source-loading step.               |
+| `CLEAN_MIN_INPUT_CHARS`       | `1000`             | Minimum body characters before the clean LLM pass runs.     |
+| `CLEAN_TIMEOUT_SECONDS`       | `60`               | Per-call timeout for the clean LLM pass.                    |
+| `SUMMARIZE_TIMEOUT_SECONDS`   | `60`               | Per-call timeout for the summarize LLM pass.                |
 
 ### Concurrency
 
-| Variable             | Default / behavior | Purpose                                                         |
-| -------------------- | ------------------ | --------------------------------------------------------------- |
-| `SOURCE_CONCURRENCY` | `1`                | Maximum concurrent source-loading groups.                       |
-| `LLM_CONCURRENCY`    | `1`                | Maximum concurrent LLM workflow groups in the default pipeline. |
+| Variable             | Default / behavior | Purpose                                                       |
+| -------------------- | ------------------ | ------------------------------------------------------------- |
+| `SOURCE_CONCURRENCY` | `1`                | Maximum concurrent source-loading groups.                     |
+| `LLM_CONCURRENCY`    | `1`                | Maximum concurrent LLM workflow groups (used by `clean-llm`). |
 
 ### Output rendering
 
-| Variable                    | Default / behavior | Purpose                                                                      |
-| --------------------------- | ------------------ | ---------------------------------------------------------------------------- |
-| `DEFAULT_OUTPUT_RENDERER`   | `debug-xml`        | Output renderer name for the default pipeline when set to a non-empty value. |
-| `DEBUG_XML_INCLUDE_SKIPPED` | `false`            | Include skipped steps in the debug-xml footer (`true`/`false`).              |
+| Variable                    | Default / behavior | Purpose                                                                     |
+| --------------------------- | ------------------ | --------------------------------------------------------------------------- |
+| `DEFAULT_OUTPUT_RENDERER`   | `debug-xml`        | Output renderer name for the active pipeline when set to a non-empty value. |
+| `DEBUG_XML_INCLUDE_SKIPPED` | `false`            | Include skipped steps in the debug-xml footer (`true`/`false`).             |
 
 ### Inbound authentication
 
@@ -121,17 +126,17 @@ The built-in `http` provider has no environment variables — it fetches the inp
 
 YAML substitution happens before schema validation.
 
-| Syntax             | Meaning                                                                   |
-| ------------------ | ------------------------------------------------------------------------- |
-| `${VAR}`           | Required. Startup fails if `VAR` is not set.                              |
-| `${VAR:-fallback}` | Optional. Uses `VAR` when set to a non-empty value, otherwise `fallback`. |
-| `$${VAR}`          | Literal escape. Produces `${VAR}` in the parsed config.                   |
+| Syntax             | Meaning                                                         |
+| ------------------ | --------------------------------------------------------------- |
+| `${VAR}`           | Resolves to the value of `VAR`, or `""` if unset.               |
+| `${VAR:-fallback}` | Uses `VAR` when set to a non-empty value, otherwise `fallback`. |
+| `$${VAR}`          | Literal escape. Produces `${VAR}` in the parsed config.         |
 
 Substitution applies recursively to YAML string values. Non-string YAML values are left as YAML values and then parsed by schemas.
 
 Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
 
-Docker Compose performs its own interpolation before the container starts. The shipped Compose files use `${VAR:?message}` for values that must be supplied by `.env` or the shell, so missing or blank provider values fail before the container is created.
+Docker Compose performs its own interpolation before the container starts. The shipped Compose files pass all provider variables through with empty defaults (`${VAR:-}`) so the container always starts and the Node process validates only the active pipeline's providers at startup.
 
 ## Authentication
 
@@ -155,8 +160,7 @@ When running in Docker, `localhost` inside the container means the container its
 
 ## Common Startup Failures
 
-- Missing required environment variable: a YAML placeholder such as `${FIRECRAWL_BASE_URL}`, `${DOCLING_BASE_URL}`, or `${LLM_MODEL}` was not provided and has no fallback in the running environment.
-- Missing required Compose variable: a Compose placeholder such as `${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env or the shell}` was unset or blank.
+- Provider config validation: a reachable provider (referenced by an active pipeline) has an empty required field, e.g. `"firecrawl baseUrl is required"`. The error names the config field, not the env var.
 - Invalid YAML shape: the top-level YAML structure failed the coarse schema in `src/config/yaml/yaml-config.ts`.
 - Unknown type: a YAML `type` does not exist in the selected built-in descriptor bundles.
 - Unknown reference: a pipeline, output renderer, provider, or concurrency group name references an instance that was not declared.

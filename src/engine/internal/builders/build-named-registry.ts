@@ -22,11 +22,7 @@ interface RawDescriptorEntry {
 /** Minimal descriptor shape needed for registry construction. */
 interface MinimalDescriptor<TInstance> {
   parseConfig(raw: unknown): unknown;
-  create(args: {
-    name: string;
-    config: unknown;
-    deps: { tools: HostTools; logger: Logger };
-  }): TInstance | Promise<TInstance>;
+  create(args: { name: string; config: unknown; deps: { tools: HostTools; logger: Logger } }): TInstance;
 }
 
 /** Labels and log-field name for descriptor-driven registry construction. */
@@ -42,6 +38,11 @@ interface NamedRegistryLabels {
   readonly missingMessage: (name: string) => string;
 }
 
+/** Built-name tracking for engine-internal skipped-leaf logging. */
+export interface BuiltNameTracking {
+  builtNames(): ReadonlySet<string>;
+}
+
 /** Inputs to a name-keyed registry build. */
 interface BuildNamedRegistryOptions<TInstance, TResolved> {
   readonly rawEntries: Readonly<Record<string, RawDescriptorEntry>>;
@@ -52,13 +53,15 @@ interface BuildNamedRegistryOptions<TInstance, TResolved> {
   readonly resolve: (id: { readonly name: string; readonly type: string }, instance: TInstance) => TResolved;
 }
 
-/** Builds a name-keyed registry by instantiating each configured entry's descriptor. */
-export async function buildNamedRegistry<TInstance, TResolved>(
+/** Builds a name-keyed registry with lazy (first-require) construction. */
+export function buildNamedRegistry<TInstance, TResolved>(
   options: BuildNamedRegistryOptions<TInstance, TResolved>
-): Promise<NamedRegistry<TResolved>> {
+): NamedRegistry<TResolved> & BuiltNameTracking {
   const { rawEntries, descriptors, tools, logger, labels, resolve } = options;
-  const resolved = new Map<string, TResolved>();
-  for (const [name, raw] of Object.entries(rawEntries)) {
+  const cache = new Map<string, TResolved>();
+
+  function build(name: string): TResolved {
+    const raw = rawEntries[name];
     const descriptor = descriptors[raw.type];
     if (!descriptor) throw new ConfigurationError(labels.unknownTypeMessage(raw.type), labels.unknownTypeCode);
     let parsed: unknown;
@@ -74,7 +77,7 @@ export async function buildNamedRegistry<TInstance, TResolved>(
     }
     let instance: TInstance;
     try {
-      instance = await descriptor.create({
+      instance = descriptor.create({
         name,
         config: parsed,
         deps: { tools, logger: logger.child({ [labels.logField]: name, type: raw.type }) }
@@ -87,16 +90,25 @@ export async function buildNamedRegistry<TInstance, TResolved>(
         type: raw.type
       });
     }
-    resolved.set(name, resolve({ name, type: raw.type }, instance));
+    const resolved = resolve({ name, type: raw.type }, instance);
+    cache.set(name, resolved);
+    return resolved;
   }
+
   return Object.freeze({
     require(name: string): TResolved {
-      const entry = resolved.get(name);
-      if (!entry) throw new ConfigurationError(labels.missingMessage(name), labels.missingCode);
-      return entry;
+      if (cache.has(name)) return cache.get(name)!;
+      if (!Object.hasOwn(rawEntries, name))
+        throw new ConfigurationError(labels.missingMessage(name), labels.missingCode);
+      return build(name);
     },
     tryGet(name: string): TResolved | undefined {
-      return resolved.get(name);
+      if (cache.has(name)) return cache.get(name)!;
+      if (!Object.hasOwn(rawEntries, name)) return undefined;
+      return build(name);
+    },
+    builtNames(): ReadonlySet<string> {
+      return new Set(cache.keys());
     }
   });
 }

@@ -6,7 +6,7 @@
  * logger identity fields.
  */
 
-import { buildNamedRegistry } from "./build-named-registry.js";
+import { buildNamedRegistry, type BuiltNameTracking } from "./build-named-registry.js";
 
 import type { LlmProviderDescriptor, LlmProviderRegistry } from "../../../contracts/extensions/llm-provider.js";
 import type { HostTools } from "../../../contracts/host/host-tools.js";
@@ -14,12 +14,12 @@ import type { Logger } from "../../../shared/logger.js";
 import type { EngineConfig } from "../../engine-config.js";
 
 /** Constructs LLM providers from configured LLM provider entries. */
-export async function buildLlmProviders(
+export function buildLlmProviders(
   rawProviders: EngineConfig["llmProviders"],
   tools: HostTools,
   logger: Logger,
   descriptors: Readonly<Record<string, LlmProviderDescriptor>>
-): Promise<LlmProviderRegistry> {
+): LlmProviderRegistry & BuiltNameTracking {
   return buildNamedRegistry({
     rawEntries: rawProviders,
     descriptors,

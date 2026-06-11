@@ -10,6 +10,9 @@ x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML l
   LOG_LEVEL: "${LOG_LEVEL:-info}"
   LOG_PRETTY: "${LOG_PRETTY:-auto}"
 
+  # Active pipeline selected by HTTP adapters.
+  DEFAULT_PIPELINE: "${DEFAULT_PIPELINE:-truncate}"
+
   # Pipeline concurrency and renderer selection.
   SOURCE_CONCURRENCY: "${SOURCE_CONCURRENCY:-1}"
   LLM_CONCURRENCY: "${LLM_CONCURRENCY:-1}"
@@ -19,15 +22,15 @@ x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML l
 
   # Source provider.
   SOURCE_PROVIDER: "${SOURCE_PROVIDER:-default-http}"
-  FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:?Set FIRECRAWL_BASE_URL in .env or the shell}"
+  FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:-}"
   FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
-  DOCLING_BASE_URL: "${DOCLING_BASE_URL:?Set DOCLING_BASE_URL in .env or the shell}"
+  DOCLING_BASE_URL: "${DOCLING_BASE_URL:-}"
   DOCLING_API_KEY: "${DOCLING_API_KEY:-}"
 
   # LLM provider.
-  LLM_BASE_URL: "${LLM_BASE_URL:?Set LLM_BASE_URL in .env or the shell}"
+  LLM_BASE_URL: "${LLM_BASE_URL:-}"
   LLM_API_KEY: "${LLM_API_KEY:-}"
-  LLM_MODEL: "${LLM_MODEL:?Set LLM_MODEL in .env or the shell}"
+  LLM_MODEL: "${LLM_MODEL:-}"
   LLM_CONTEXT_TOKENS: "${LLM_CONTEXT_TOKENS:-}"
   LLM_CHARS_PER_TOKEN: "${LLM_CHARS_PER_TOKEN:-3.5}"
   LLM_SAFETY_MARGIN_TOKENS: "${LLM_SAFETY_MARGIN_TOKENS:-128}"

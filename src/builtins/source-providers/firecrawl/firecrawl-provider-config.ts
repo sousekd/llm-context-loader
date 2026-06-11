@@ -11,7 +11,7 @@ import { booleanStringAsBooleanOrUndefined } from "../../../shared/config-coerci
 
 const firecrawlConfigSchema = z
   .object({
-    baseUrl: z.string().url(),
+    baseUrl: z.string().min(1, "firecrawl baseUrl is required").url("firecrawl baseUrl must be a valid URL"),
     apiKey: z.string().default(""),
     output: z.enum(["markdown", "html", "rawHtml"]).default("markdown"),
     onlyMainContent: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),

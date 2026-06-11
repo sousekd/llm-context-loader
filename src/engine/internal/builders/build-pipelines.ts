@@ -29,6 +29,7 @@ export async function buildPipelines(
   const rendererRegistry = services.require(outputRendererRegistryKey);
   const pipelines = new Map<string, CompiledPipeline>();
   for (const [pipelineName, pipeline] of Object.entries(rawPipelines)) {
+    if (!pipeline.enabled) continue;
     const renderer = rendererRegistry.tryGet(pipeline.outputRenderer);
     if (!renderer)
       throw new ConfigurationError(

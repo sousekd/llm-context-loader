@@ -22,12 +22,10 @@ describe("yamlToAppConfig", () => {
 
     const appConfig = yamlToAppConfig(raw);
 
-    expect(appConfig.engineConfig).toEqual({
-      sourceProviders: raw.sourceProviders,
-      llmProviders: raw.llmProviders,
-      outputRenderers: raw.outputRenderers,
-      pipelines: raw.pipelines
-    });
+    expect(appConfig.engineConfig.sourceProviders).toEqual(raw.sourceProviders);
+    expect(appConfig.engineConfig.llmProviders).toEqual(raw.llmProviders);
+    expect(appConfig.engineConfig.outputRenderers).toEqual(raw.outputRenderers);
+    expect(appConfig.engineConfig.pipelines.default?.enabled).toBe(true);
     expect(appConfig.adapters.http).toEqual(raw.httpAdapters);
     expect(appConfig.metadata?.schemaVersion).toBe(1);
   });
@@ -75,17 +73,24 @@ httpAdapters:
 });
 
 describe("substituteEnv", () => {
-  it("supports required values, fallbacks, empty fallbacks, and literal escapes", () => {
+  it("supports required values, fallbacks, empty fallbacks, literal escapes, and missing-no-default", () => {
     expect(
       substituteEnv(
         {
           required: "${REQUIRED}",
           fallback: "${MISSING:-fallback}",
           empty: "${EMPTY:-fallback}",
-          literal: "$${REQUIRED}"
+          literal: "$${REQUIRED}",
+          missing: "${MISSING_NO_DEFAULT}"
         },
         { REQUIRED: "value", EMPTY: "" }
       )
-    ).toEqual({ required: "value", fallback: "fallback", empty: "fallback", literal: "${REQUIRED}" });
+    ).toEqual({
+      required: "value",
+      fallback: "fallback",
+      empty: "fallback",
+      literal: "${REQUIRED}",
+      missing: ""
+    });
   });
 });

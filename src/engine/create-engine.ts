@@ -33,21 +33,21 @@ export async function createEngine(args: {
   readonly logger: Logger;
 }): Promise<EngineRuntime> {
   const serviceBuilder = createExtensionServicesBuilder();
-  const sourceProviders = await buildSourceProviders(
+  const sourceProviders = buildSourceProviders(
     args.config.sourceProviders,
     args.tools,
     args.logger,
     args.descriptors.sourceProviders
   );
   serviceBuilder.register(sourceProviderRegistryKey, sourceProviders);
-  const llmProviders = await buildLlmProviders(
+  const llmProviders = buildLlmProviders(
     args.config.llmProviders,
     args.tools,
     args.logger,
     args.descriptors.llmProviders
   );
   serviceBuilder.register(llmProviderRegistryKey, llmProviders);
-  const outputRenderers = await buildOutputRenderers(
+  const outputRenderers = buildOutputRenderers(
     args.config.outputRenderers,
     args.tools,
     args.logger,
@@ -63,6 +63,11 @@ export async function createEngine(args: {
     args.logger,
     args.descriptors.pipelineSteps
   );
+
+  logSkipped(args.logger, "source provider", Object.keys(args.config.sourceProviders), sourceProviders.builtNames());
+  logSkipped(args.logger, "LLM provider", Object.keys(args.config.llmProviders), llmProviders.builtNames());
+  logSkipped(args.logger, "output renderer", Object.keys(args.config.outputRenderers), outputRenderers.builtNames());
+
   const runner = new PipelineRunner(
     new PipelineOrchestrator({ logger: args.logger.child({ component: "orchestrator" }) })
   );
@@ -71,16 +76,25 @@ export async function createEngine(args: {
   return createEngineRuntime({ registries, pipelines: pipelineInfos(args.config), handles });
 }
 
-/** Builds stable pipeline discovery info from engine config. */
+/** Builds stable pipeline discovery info from engine config (enabled only). */
 function pipelineInfos(config: EngineConfig): ReadonlyArray<PipelineInfo> {
-  return Object.entries(config.pipelines).map(([name, pipeline]) => ({
-    name,
-    outputRenderer: pipeline.outputRenderer,
-    steps: pipeline.steps.map(step => ({
-      name: step.name,
-      type: step.type,
-      timeoutSeconds: step.timeoutSeconds,
-      concurrencyGroup: step.concurrencyGroup
-    }))
-  }));
+  return Object.entries(config.pipelines)
+    .filter(([, pipeline]) => pipeline.enabled)
+    .map(([name, pipeline]) => ({
+      name,
+      outputRenderer: pipeline.outputRenderer,
+      steps: pipeline.steps.map(step => ({
+        name: step.name,
+        type: step.type,
+        timeoutSeconds: step.timeoutSeconds,
+        concurrencyGroup: step.concurrencyGroup
+      }))
+    }));
+}
+
+/** Logs defined-but-unreferenced leaves for visibility (D7). */
+function logSkipped(logger: Logger, label: string, defined: ReadonlyArray<string>, built: ReadonlySet<string>): void {
+  const skipped = defined.filter(name => !built.has(name));
+  if (skipped.length > 0)
+    logger.info({ skipped }, `${label}s defined but not referenced by any active pipeline; skipped`);
 }

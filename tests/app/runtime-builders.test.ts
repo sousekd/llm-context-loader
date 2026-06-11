@@ -26,7 +26,7 @@ describe("descriptor builders", () => {
       external: { type: "opaque_source_provider", config: { provider: "reserved-word", nested: { value: true } } }
     };
 
-    const providers = await buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
+    const providers = buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
       opaque_source_provider: {
         type: "opaque_source_provider",
         parseConfig: raw => {
@@ -37,8 +37,10 @@ describe("descriptor builders", () => {
       } satisfies SourceProviderDescriptor<unknown>
     });
 
+    // Lazy: require triggers parse+create
+    const resolved = providers.require("external");
     expect(parsedConfigs).toEqual([{ provider: "reserved-word", nested: { value: true } }]);
-    expect(providers.require("external").name).toBe("external");
+    expect(resolved.name).toBe("external");
   });
 
   it("passes LLM provider config through LLM provider descriptors unchanged", async () => {
@@ -47,7 +49,7 @@ describe("descriptor builders", () => {
       external: { type: "opaque_llm_provider", config: { model: "reserved-word", nested: { value: true } } }
     };
 
-    const providers = await buildLlmProviders(rawProviders, createTestHostTools(), createTestLogger(), {
+    const providers = buildLlmProviders(rawProviders, createTestHostTools(), createTestLogger(), {
       opaque_llm_provider: {
         type: "opaque_llm_provider",
         parseConfig: raw => {
@@ -58,8 +60,10 @@ describe("descriptor builders", () => {
       } satisfies LlmProviderDescriptor<unknown>
     });
 
+    // Lazy: require triggers parse+create
+    const resolved = providers.require("external");
     expect(parsedConfigs).toEqual([{ model: "reserved-word", nested: { value: true } }]);
-    expect(providers.require("external").name).toBe("external");
+    expect(resolved.name).toBe("external");
   });
 
   it("passes step config through step descriptors unchanged", async () => {
@@ -67,6 +71,7 @@ describe("descriptor builders", () => {
     let createdStep: PipelineStep | undefined;
     const rawPipelines: EngineConfig["pipelines"] = {
       default: {
+        enabled: true,
         outputRenderer: "test",
         limiters: { shared: 1 },
         steps: [
@@ -166,27 +171,30 @@ describe("descriptor builders", () => {
       external: { type: "opaque_source_provider", config: {} }
     };
 
-    await expect(
-      buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
-        opaque_source_provider: {
-          type: "opaque_source_provider",
-          parseConfig: raw => raw,
-          create: () => {
-            throw cause;
-          }
-        } satisfies SourceProviderDescriptor<unknown>
-      })
-    ).rejects.toMatchObject({
-      code: "source_provider_create_failed",
-      details: { cause, name: "external", type: "opaque_source_provider" },
-      cause
+    const providers = buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
+      opaque_source_provider: {
+        type: "opaque_source_provider",
+        parseConfig: raw => raw,
+        create: () => {
+          throw cause;
+        }
+      } satisfies SourceProviderDescriptor<unknown>
     });
+
+    expect(() => providers.require("external")).toThrow(
+      expect.objectContaining({
+        code: "source_provider_create_failed",
+        details: { cause, name: "external", type: "opaque_source_provider" },
+        cause
+      })
+    );
   });
 
   it("wraps pipeline step create failures as ConfigurationError", async () => {
     const cause = new Error("step factory exploded");
     const rawPipelines: EngineConfig["pipelines"] = {
       default: {
+        enabled: true,
         outputRenderer: "test",
         limiters: {},
         steps: [{ type: "opaque_step", name: "opaque", timeoutSeconds: 7, config: {} }]
@@ -240,17 +248,17 @@ describe("descriptor builders", () => {
       external: { type: "opaque_source_provider", config: {} }
     };
 
-    await expect(
-      buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
-        opaque_source_provider: {
-          type: "opaque_source_provider",
-          parseConfig: raw => raw,
-          create: () => {
-            throw classified;
-          }
-        } satisfies SourceProviderDescriptor<unknown>
-      })
-    ).rejects.toBe(classified);
+    const providers = buildSourceProviders(rawProviders, createTestHostTools(), createTestLogger(), {
+      opaque_source_provider: {
+        type: "opaque_source_provider",
+        parseConfig: raw => raw,
+        create: () => {
+          throw classified;
+        }
+      } satisfies SourceProviderDescriptor<unknown>
+    });
+
+    expect(() => providers.require("external")).toThrow(classified);
   });
 });
 

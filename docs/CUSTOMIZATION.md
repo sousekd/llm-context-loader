@@ -34,9 +34,16 @@ HTTP adapters also name the pipeline they expose:
 ```yaml
 some-adapter:
   type: open-webui
-  pipeline: default
+  pipeline: ${DEFAULT_PIPELINE:-truncate}
   config: {}
 ```
+
+Each pipeline has an optional `enabled` field (tri-state: `true`, `false`, or omitted). When
+omitted, a pipeline is active only when at least one HTTP adapter references it. Setting
+`enabled: false` parks it. Setting `enabled: true` pins it active regardless of adapter
+references. The shipped pipelines leave `enabled` omitted, so `DEFAULT_PIPELINE` alone drives
+the active set. Active-set pipelines are compiled and validated at startup; inactive ones are
+skipped (their providers are never built).
 
 Pipeline steps include common orchestration fields plus a type-specific `config` block:
 

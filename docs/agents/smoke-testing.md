@@ -74,6 +74,16 @@ Give the container time to pass its healthcheck — `-HealthTimeoutSec 30` cover
 
 Run the full set against each provider, on each surface, in each environment you need to cover.
 
+## Validating Configuration Without Starting
+
+```powershell
+npm run dev -- --check
+```
+
+`--check` composes the app and validates the active configuration (pipelines, providers,
+templates) without starting the HTTP listener. Exits 0 on success, 1 on failure. Useful in CI
+or when iterating on YAML changes without needing a running server.
+
 ## Reading the Output
 
 Each run prints a per-URL block and then aggregate breakdowns. When the `debug-xml` renderer is active, the per-URL footer is the source of truth:
@@ -92,6 +102,7 @@ When the script output is not enough, read the server logs: pipeline start/finis
 
 - [ ] `SEARX_BASE` exported before `gather-urls.ps1`? It falls back to localhost otherwise.
 - [ ] `SOURCE_PROVIDER` set **before** `npm run dev`? It is read once at startup.
+- [ ] `DEFAULT_PIPELINE` set **before** `npm run dev`? It is also read once at startup.
 - [ ] For Docker, edited `.env` rather than a terminal `$env:` var? Compose only reads the file.
 - [ ] Previous server stopped before switching providers? Otherwise the port stays taken.
 - [ ] `-HealthTimeoutSec 30` on Docker runs so the healthcheck can pass first?

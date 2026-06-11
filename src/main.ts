@@ -24,8 +24,14 @@ async function main(): Promise<void> {
   const envConfig = loadEnvConfig();
   const logger = createLogger(envConfig);
   startupLogger = logger;
-  logger.info({ component: "server" }, "LLM Context Loader starting...");
+
   const loaded = await composeApp({ envConfig, env: process.env, logger, httpFetch: globalThis.fetch });
+  if (process.argv.includes("--check")) {
+    logger.info({ component: "check" }, "Configuration valid. Exiting.");
+    process.exit(0);
+  }
+
+  logger.info({ component: "server" }, "LLM Context Loader starting...");
   const app = await buildHttpApp(
     loaded.adapters.http.map(({ adapter }) => adapter),
     logger
