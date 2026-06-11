@@ -18,6 +18,7 @@ describe("lazy provider/registry activation", () => {
           sourceProviders: {
             "bad-provider": { type: "validated-source", config: { requiredField: "" } }
           },
+          contentTransformers: {},
           llmProviders: {},
           outputRenderers: { markdown: { type: "markdown", config: {} } },
           pipelines: {
@@ -41,6 +42,7 @@ describe("lazy provider/registry activation", () => {
               }
             } satisfies SourceProviderDescriptor
           },
+          contentTransformers: {},
           llmProviders: {},
           outputRenderers: { markdown: markdownRendererDescriptor },
           pipelineSteps: {
@@ -60,6 +62,7 @@ describe("lazy provider/registry activation", () => {
           sourceProviders: {
             "bad-provider": { type: "validated-source", config: { requiredField: "" } }
           },
+          contentTransformers: {},
           llmProviders: {},
           outputRenderers: { markdown: { type: "markdown", config: {} } },
           pipelines: {
@@ -83,6 +86,7 @@ describe("lazy provider/registry activation", () => {
               }
             } satisfies SourceProviderDescriptor
           },
+          contentTransformers: {},
           llmProviders: {},
           outputRenderers: { markdown: markdownRendererDescriptor },
           pipelineSteps: {

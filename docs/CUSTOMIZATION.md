@@ -15,6 +15,7 @@ schemaVersion: 1
 httpAdapters: {}
 outputRenderers: {}
 sourceProviders: {}
+contentTransformers: {}
 llmProviders: {}
 pipelines: {}
 ```
@@ -171,6 +172,27 @@ config:
 
 The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name` (the JSON format is always requested internally regardless of the `output` setting). Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
 
+## Content Transformers
+
+Content transformers convert a loaded body from one representation to another in-process, with no upstream call. The `transform` pipeline step selects a transformer by name and applies it to the current body.
+
+### `mdream`
+
+Converts HTML bodies to markdown using the [`@mdream/js`](https://www.npmjs.com/package/@mdream/js) library. Pure-JS, no native dependencies.
+
+```yaml
+config:
+  minimal: ${MDREAM_MINIMAL:-true}
+  clean: ${MDREAM_CLEAN:-true}
+```
+
+| Knob      | Values | Default | Purpose                                                                                                  |
+| --------- | ------ | ------- | -------------------------------------------------------------------------------------------------------- |
+| `minimal` | bool   | `true`  | Apply mdream's minimal preset (isolate main content, filter boilerplate). Takes precedence over `clean`. |
+| `clean`   | bool   | `true`  | Clean up the markdown output: drop tracking params, redundant and empty links, and collapse blank lines. |
+
+The transformer supports text bodies whose media type is `text/html` or `application/xhtml+xml` and a requested target of `text/markdown`. The input URL is passed to mdream as the conversion origin, so relative links and images resolve against it. The original body title is preserved.
+
 ## LLM Providers
 
 ### `openai-chat`
@@ -214,7 +236,7 @@ pipelines:
 
 `outputRenderer` references a named output renderer instance. `limiters` declares concurrency group names and their maximum concurrency. A step can opt into a group with `concurrencyGroup`.
 
-Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the default pipeline, `llm-pass(clean)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
+Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the `clean-llm` pipeline, `llm-pass(clean)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
 
 `timeoutSeconds` applies to both limiter waiting and step execution. For one adjacent concurrency block, limiter waiting uses the longest `timeoutSeconds` value in that block.
 
@@ -224,7 +246,7 @@ Adjacent steps that share the same `concurrencyGroup` share one limiter acquisit
 
 ```yaml
 config:
-  provider: ${SOURCE_PROVIDER:-default-http}
+  provider: ${SOURCE_PROVIDER:-http-default}
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.
@@ -233,7 +255,7 @@ Loads the initial body from a named source provider. If a body already exists, t
 
 ```yaml
 config:
-  provider: default-llm
+  provider: llm-default
   minInputChars: 1500
   maxInputChars: 80000
   outputReserveRatio: 1.0
@@ -270,6 +292,27 @@ Both templates are required. `templates.vars` is an optional map of literal valu
 | `templates.vars.*` | Any keys declared under `templates.vars` in YAML. |
 
 Mustache escaping is disabled for prompt templates so markdown is passed through as-is.
+
+### `transform`
+
+```yaml
+config:
+  transformer: mdream-default
+  target: text/markdown
+  onUnsupported: skip
+  emitDiagnostics: false
+```
+
+Applies a named content transformer to the current body. The step resolves `transformer` from the `contentTransformers` registry and asks it to produce `target`.
+
+| Knob              | Values           | Default | Purpose                                                                                                        |
+| ----------------- | ---------------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `transformer`     | string           | —       | Name of a configured `contentTransformers` instance. Required.                                                 |
+| `target`          | string           | —       | Media type the transformer must produce, for example `text/markdown`. Required.                                |
+| `onUnsupported`   | `skip` \| `fail` | `skip`  | What to do when the transformer does not support the current body (wrong source media type or representation). |
+| `emitDiagnostics` | bool             | `false` | When enabled, transformer-reported diagnostics are surfaced as child nodes in the step report.                 |
+
+The step skips with `no_body` when there is no body. When the transformer does not support the current body it skips with `unsupported`, or fails with that reason when `onUnsupported: fail`. A transform aborted by the step timeout fails with `timeout`. If the transformer returns a body that does not match `target`, the step fails with `wrong_output_type`.
 
 ### `truncate`
 
@@ -313,12 +356,30 @@ In both modes a hallucination makes the pipeline rollup `degraded` (an earlier b
 
 Shipped defaults: `verify_after_clean` uses `rollback` with `maxReportedUrls: 0` (silent rollback), `verify_after_summarize` uses `report` with `maxReportedUrls: 50`.
 
-## Default Pipeline
+## Shipped Pipelines
 
-The shipped default pipeline is:
+The config ships three pipelines, selected via `DEFAULT_PIPELINE` (defaults to `truncate`).
+
+### `truncate` (default)
 
 ```text
-load-source -> capture-urls -> llm-pass(clean) -> verify-urls(rollback) -> llm-pass(summarize) -> verify-urls(report) -> truncate
+load-source(http-default) -> truncate
 ```
 
-That shape is a starting point, not a fixed contract. Prefer small YAML changes and verify behavior with a few representative URLs before relying on a customized pipeline.
+Fetches the URL directly and truncates to budget. No external services required.
+
+### `clean-deterministic`
+
+```text
+load-source(firecrawl-html) -> transform(html -> markdown via mdream) -> truncate
+```
+
+Loads HTML from the `firecrawl-html` source instance (Firecrawl with `output: rawHtml`) and converts it to markdown deterministically with the `mdream` transformer, with no LLM passes. Defaults `SOURCE_PROVIDER` to `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-deterministic`.
+
+### `clean-llm`
+
+```text
+load-source(firecrawl-markdown) -> capture-urls -> llm-pass(clean) -> verify-urls(rollback) -> llm-pass(summarize) -> verify-urls(report) -> truncate
+```
+
+The original reference pipeline. Loads markdown from a Firecrawl instance, runs clean and summarize LLM passes with URL-hallucination gates, then truncates. Defaults `SOURCE_PROVIDER` to `firecrawl-markdown`. Select with `DEFAULT_PIPELINE=clean-llm`.

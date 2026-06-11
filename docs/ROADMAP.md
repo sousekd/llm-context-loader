@@ -40,7 +40,7 @@ The URL-in / clean-Markdown-within-a-budget contract does not change. What chang
 
 ## Coming soon
 
-1. **Deterministic extract and convert steps.** First implementations: main-content extraction with Mozilla Readability (in-process, needs only a DOM such as linkedom) and HTML-to-Markdown with node-html-markdown or Turndown. Composed, these replace the LLM clean pass on the HTML path.
+1. **In-process main-content extraction.** A new pipeline step that extracts content from HTML using Readability. This creates a fully deterministic HTML-to-markdown path with no external service dependency for boilerplate removal.
 2. **Demote the LLM clean pass.** Once deterministic clean matches or beats it on representative URLs, make the clean stage optional and only execute it for URLs where deterministic clean did not produce desired results. Keep summarize.
 3. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and implement fenced-code-block verification/repair.
 

@@ -27,3 +27,9 @@ export function isTextLike(mediaType: string): boolean {
     normalized.endsWith("+xml")
   );
 }
+
+/** Returns whether a media type is HTML or XHTML, ignoring parameters and case. */
+export function isHtmlMediaType(mediaType: string): boolean {
+  const essence = mediaType.split(";", 1)[0].trim().toLowerCase();
+  return essence === mediaTypes.html || essence === mediaTypes.xhtml;
+}

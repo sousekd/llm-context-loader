@@ -49,6 +49,7 @@ export function yamlToAppConfig(yamlConfig: RawYamlConfig): AppConfig {
   return {
     engineConfig: {
       sourceProviders: yamlConfig.sourceProviders,
+      contentTransformers: yamlConfig.contentTransformers,
       llmProviders: yamlConfig.llmProviders,
       outputRenderers: yamlConfig.outputRenderers,
       pipelines

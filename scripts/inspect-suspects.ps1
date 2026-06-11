@@ -3,7 +3,7 @@
 # poor cleanup result.
 #
 # For each URL three artifacts are written to scripts/out/:
-#   <slug>.source.md   - raw Firecrawl markdown
+#   <slug>.source.html - raw HTML from Firecrawl (universal baseline for any pipeline)
 #   <slug>.clean.md    - loader's /r/<url> body (including footer)
 #   <slug>.footer.txt  - extracted <loader_info .../> line (or empty)
 #
@@ -95,7 +95,7 @@ foreach ($url in $Urls) {
     Write-Host "`n=== $slug ===" -ForegroundColor Cyan
     Write-Host "  $url" -ForegroundColor DarkGray
 
-    $body = @{ url = $url; formats = @('markdown'); onlyMainContent = $true } | ConvertTo-Json -Compress
+    $body = @{ url = $url; formats = @('rawHtml') } | ConvertTo-Json -Compress
 
     $src = ''
     try {
@@ -103,7 +103,7 @@ foreach ($url in $Urls) {
             -Uri "$($firecrawl.BaseUrl)/v2/scrape" `
             -Headers $firecrawlHeaders -ContentType 'application/json' `
             -Body $body -TimeoutSec 120
-        $src = $firecrawlResponse.data.markdown
+        $src = $firecrawlResponse.data.rawHtml
         if (-not $src) { $src = $firecrawlResponse.data.content }
     }
     catch {
@@ -111,7 +111,7 @@ foreach ($url in $Urls) {
         $fail++
         continue
     }
-    Set-Content -LiteralPath (Join-Path $outDir "$slug.source.md") -Value $src -Encoding utf8
+    Set-Content -LiteralPath (Join-Path $outDir "$slug.source.html") -Value $src -Encoding utf8
 
     $clean = ''
     try {

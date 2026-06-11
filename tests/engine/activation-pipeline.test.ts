@@ -30,6 +30,7 @@ describe("pipeline activation", () => {
     const engine = await createEngine({
       config: {
         sourceProviders: {},
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: { type: "markdown", config: {} } },
         pipelines: {
@@ -49,6 +50,7 @@ describe("pipeline activation", () => {
       },
       descriptors: {
         sourceProviders: {},
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: markdownRendererDescriptor },
         pipelineSteps: { "static-body": staticBodyStepDescriptor }
@@ -75,12 +77,14 @@ describe("pipeline activation", () => {
     await createEngine({
       config: {
         sourceProviders: { "never-used": { type: "never-built", config: {} } },
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: { type: "markdown", config: {} } },
         pipelines: {}
       },
       descriptors: {
         sourceProviders: { "never-built": sourceProv },
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: markdownRendererDescriptor },
         pipelineSteps: {}

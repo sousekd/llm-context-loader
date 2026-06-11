@@ -27,8 +27,8 @@ describe("composeApp", () => {
       httpFetch: async () => new Response("{}")
     });
 
-    expect(loaded.registries.sourceProviders.require("default-firecrawl").name).toBe("default-firecrawl");
-    expect(loaded.registries.llmProviders.require("default-llm").name).toBe("default-llm");
+    expect(loaded.registries.sourceProviders.require("firecrawl-markdown").name).toBe("firecrawl-markdown");
+    expect(loaded.registries.llmProviders.require("llm-default").name).toBe("llm-default");
     expect(
       loaded.registries.pipelines.find(pipeline => pipeline.name === "default")?.steps.map(entry => entry.name)
     ).toEqual(["fetch", "clean", "truncate"]);
@@ -45,7 +45,7 @@ describe("composeApp", () => {
         logger: createTestLogger(),
         httpFetch: fetch
       })
-    ).rejects.toThrow("Invalid config for source provider 'default-firecrawl'");
+    ).rejects.toThrow("Invalid config for source provider 'firecrawl-markdown'");
 
     const missingTemplate = await writeConfigFixture(defaultYaml(), false);
     await expect(
@@ -110,7 +110,7 @@ describe("composeApp", () => {
     });
 
     await loaded.registries.llmProviders
-      .require("default-llm")
+      .require("llm-default")
       .provider.chat([], { signal: new AbortController().signal });
 
     expect(requestBody?.model).toBe("${LLM_MODEL}");
@@ -123,8 +123,8 @@ describe("composeApp", () => {
         .replace("stripBase64Images: true", "stripBase64Images: ${FIRECRAWL_STRIP_IMAGES:-}")
         .replace("includeSkipped: true", "includeSkipped: ${DEBUG_XML_INCLUDE_SKIPPED:-}")
         .replace(
-          "        config:\n          provider: default-llm",
-          "        timeoutSeconds: ${CLEAN_TIMEOUT_SECONDS:-}\n        config:\n          provider: default-llm"
+          "        config:\n          provider: llm-default",
+          "        timeoutSeconds: ${CLEAN_TIMEOUT_SECONDS:-}\n        config:\n          provider: llm-default"
         )
         .replace("minInputChars: 1", "minInputChars: ${MIN_INPUT_CHARS:-}")
         .replace("maxInputChars: 100", "maxInputChars: ${MAX_INPUT_CHARS:-}")
@@ -159,7 +159,7 @@ describe("composeApp", () => {
     ).toBe(60);
 
     await loaded.registries.sourceProviders
-      .require("default-firecrawl")
+      .require("firecrawl-markdown")
       .provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(firecrawlRequestBody).toMatchObject({ onlyMainContent: false, removeBase64Images: true });
@@ -243,7 +243,7 @@ function envValues(): NodeJS.ProcessEnv {
 
 function defaultYaml(): string {
   return `sourceProviders:
-  default-firecrawl:
+  firecrawl-markdown:
     type: firecrawl
     config:
       baseUrl: \${FIRECRAWL_BASE_URL}
@@ -253,7 +253,7 @@ function defaultYaml(): string {
       stripBase64Images: true
       parsePdf: true
 llmProviders:
-  default-llm:
+  llm-default:
     type: openai-chat
     config:
       baseUrl: \${LLM_BASE_URL}
@@ -277,12 +277,12 @@ pipelines:
         name: fetch
         concurrencyGroup: source
         config:
-          provider: default-firecrawl
+          provider: firecrawl-markdown
       - type: llm-pass
         name: clean
         concurrencyGroup: llm
         config:
-          provider: default-llm
+          provider: llm-default
           minInputChars: 1
           maxInputChars: 100
           templates:

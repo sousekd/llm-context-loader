@@ -1,12 +1,12 @@
 # Extension Authoring
 
-This guide is for adding a new built-in implementation (source provider, LLM provider, pipeline step, output renderer, or HTTP adapter) inside this repository. Each category sits behind a small descriptor contract in its own folder, which keeps adding a built-in a localized change. Keep this guide and the live contracts in sync.
+This guide is for adding a new built-in implementation (source provider, content transformer, LLM provider, pipeline step, output renderer, or HTTP adapter) inside this repository. Each category sits behind a small descriptor contract in its own folder, which keeps adding a built-in a localized change. Keep this guide and the live contracts in sync.
 
 Read [docs/ARCHITECTURE.md](../ARCHITECTURE.md) and [architecture-rules.md](architecture-rules.md) first. This document assumes you already know the runtime flow, dependency graph, and the three host-capability surfaces.
 
 ## Common Shape
 
-All five extension categories follow the same shape:
+All six extension categories follow the same shape:
 
 1. A small **runtime instance interface** under `src/contracts/extensions/`, `src/contracts/pipeline/`, or the adapter surface describing behavior only. These interfaces do not carry `name` or `type`.
 2. A **descriptor** included by the appropriate descriptor bundle. Each descriptor declares:
@@ -62,6 +62,10 @@ Note the `.provider` deref — registries hold `Resolved*` wrappers.
 ### Source Providers
 
 Implement `SourceProvider` (`src/contracts/extensions/source-provider.ts`). The interface has `load(url, { signal }): Promise<SourceDocument>`. Throw `UpstreamError` for HTTP, parse, or empty-response failures (use the constructors in `src/shared/errors.ts`); let abort errors propagate. Built-in example: `src/builtins/source-providers/firecrawl/`.
+
+### Content Transformers
+
+Implement `ContentTransformer` (`src/contracts/extensions/content-transformer.ts`): `supports({ sourceKind, sourceMediaType, request })` and `transform({ url, body, request }, { signal }): Promise<ContentTransformResult>`. `supports` gates `transform`: the step only invokes a matching transformer, so `transform` may throw `InternalError` for inputs that bypass the gate. Built-in example: `src/builtins/content-transformers/mdream/`.
 
 ### LLM Providers
 

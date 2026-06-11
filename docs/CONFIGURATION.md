@@ -47,7 +47,7 @@ These are consumed by helper scripts and ignored by the Node app.
 
 The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
 
-The default (`truncate`) pipeline needs no provider configuration — it fetches and truncates. The `clean-llm` pipeline uses an LLM and Firecrawl; those env vars are
+The default (`truncate`) pipeline needs no provider configuration — it fetches and truncates. The `clean-deterministic` pipeline loads HTML from `firecrawl-html` and converts it to markdown with the `mdream` transformer (no LLM); its Firecrawl env vars are required only when it is active (set `DEFAULT_PIPELINE=clean-deterministic`). The `clean-llm` pipeline uses an LLM and Firecrawl; those env vars are
 required only when `clean-llm` is active (set `DEFAULT_PIPELINE=clean-llm`).
 
 Validation is lazy: the service validates and constructs only the providers and pipelines that
@@ -60,31 +60,40 @@ The placeholders below are grouped by the part of the pipeline they configure.
 
 | Variable          | Default / behavior | Purpose                                                        |
 | ----------------- | ------------------ | -------------------------------------------------------------- |
-| `SOURCE_PROVIDER` | `default-http`     | Named source provider used by the `load-source` pipeline step. |
+| `SOURCE_PROVIDER` | `http-default`     | Named source provider used by the `load-source` pipeline step. |
 
-The built-in `http` provider has no environment variables — it fetches the input URL directly.
+The built-in `http` provider has no environment variables — it fetches the input URL directly. Each pipeline supplies its own `SOURCE_PROVIDER` fallback: `http-default` for `truncate`, `firecrawl-html` for `clean-deterministic`, and `firecrawl-markdown` for `clean-llm`.
 
 ### Source provider (Firecrawl)
 
-| Variable             | Default / behavior | Purpose                                                                                      |
-| -------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
-| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required only when a pipeline referencing `default-firecrawl` is active. |
-| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                             |
+| Variable             | Default / behavior | Purpose                                                                                                            |
+| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when any Firecrawl-based provider is active (`firecrawl-markdown`, `firecrawl-html`). |
+| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                   |
 
 ### Source provider (Docling)
 
 | Variable           | Default / behavior | Purpose                                                                                        |
 | ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `default-docling` is active. |
+| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `docling-default` is active. |
 | `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                      |
+
+### Content transformer (mdream)
+
+| Variable         | Default / behavior | Purpose                                                          |
+| ---------------- | ------------------ | ---------------------------------------------------------------- |
+| `MDREAM_MINIMAL` | `true`             | Isolate main content and filter boilerplate in `mdream-default`. |
+| `MDREAM_CLEAN`   | `true`             | Post-conversion link and whitespace cleanup.                     |
+
+These are read only when a pipeline using the `transform` step (such as `clean-deterministic`) is active.
 
 ### LLM provider (OpenAI-compatible)
 
 | Variable                   | Default / behavior | Purpose                                                                                                                     |
 | -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required only when a pipeline referencing `default-llm` is active. |
+| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required only when a pipeline referencing `llm-default` is active. |
 | `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                                                                  |
-| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required only when a pipeline referencing `default-llm` is active.               |
+| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required only when a pipeline referencing `llm-default` is active.               |
 | `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate.                                               |
 | `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.                                                       |
 | `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.                                                        |
