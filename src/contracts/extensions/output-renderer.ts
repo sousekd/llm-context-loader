@@ -56,7 +56,7 @@ export interface OutputRendererCreateArgs<TConfig = unknown> {
 export interface OutputRendererDescriptor<TConfig = unknown> {
   readonly type: string;
   parseConfig(raw: unknown): TConfig;
-  create(args: OutputRendererCreateArgs<TConfig>): OutputRenderer | Promise<OutputRenderer>;
+  create(args: OutputRendererCreateArgs<TConfig>): OutputRenderer;
 }
 
 /** Identifies the output renderer registry extension service. */

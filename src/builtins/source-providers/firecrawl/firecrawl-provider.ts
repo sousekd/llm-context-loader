@@ -1,5 +1,5 @@
 /**
- * Implements URL-to-markdown loading through Firecrawl's v2 scrape endpoint.
+ * Implements typed text loading through Firecrawl's v2 scrape endpoint.
  *
  * Provider responses are untrusted external content. Upstream HTTP, JSON parse,
  * response-shape, empty-body, and network failures are translated to
@@ -10,6 +10,7 @@
 import { z } from "zod";
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
+import { mediaTypes } from "../../../shared/media-types.js";
 import { joinUrl } from "../../../shared/urls.js";
 
 import type { SourceDocument, SourceProvider } from "../../../contracts/extensions/source-provider.js";
@@ -24,11 +25,15 @@ const firecrawlResponseSchema = z
     data: z
       .object({
         markdown: z.string().optional(),
+        html: z.string().optional(),
+        rawHtml: z.string().optional(),
         title: z.string().optional(),
         metadata: z.record(z.unknown()).optional()
       })
       .optional(),
     markdown: z.string().optional(),
+    html: z.string().optional(),
+    rawHtml: z.string().optional(),
     title: z.string().optional(),
     metadata: z.record(z.unknown()).optional()
   })
@@ -42,7 +47,7 @@ export class FirecrawlProvider implements SourceProvider {
     private readonly deps: { readonly httpFetch: typeof globalThis.fetch; readonly logger: Logger }
   ) {}
 
-  /** Loads a URL through Firecrawl and returns markdown content. */
+  /** Loads a URL through Firecrawl and returns configured text content. */
   async load(url: string, opts: { readonly signal: AbortSignal }): Promise<SourceDocument> {
     try {
       const response = await this.deps.httpFetch(joinUrl(this.config.baseUrl, "/v2/scrape"), {
@@ -51,9 +56,10 @@ export class FirecrawlProvider implements SourceProvider {
         headers: this.headers(),
         body: JSON.stringify({
           url,
-          formats: this.config.formats,
+          formats: [this.config.output],
           onlyMainContent: this.config.onlyMainContent,
-          maxAge: this.config.maxAge
+          removeBase64Images: this.config.stripBase64Images,
+          parsers: this.config.parsePdf ? ["pdf"] : []
         })
       });
 
@@ -80,11 +86,15 @@ export class FirecrawlProvider implements SourceProvider {
 
       const data = parsed.data.data ?? parsed.data;
       const metadata = data.metadata ?? {};
-      const content = data.markdown?.trim() ?? "";
+      const contentField = data[this.config.output] as string | undefined;
+      const content = contentField?.trim() ?? "";
       if (!content)
-        throw new UpstreamError("Firecrawl returned empty markdown", "empty", { upstreamStatus: response.status });
+        throw new UpstreamError(`Firecrawl returned empty ${this.config.output}`, "empty", {
+          upstreamStatus: response.status
+        });
       const title = data.title ?? (typeof metadata.title === "string" ? metadata.title : undefined);
-      return { content, title };
+      const mediaType: string = this.config.output === "markdown" ? mediaTypes.markdown : mediaTypes.html;
+      return { kind: "text", content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
       throw new UpstreamError(error instanceof Error ? error.message : String(error), "network", { cause: error });

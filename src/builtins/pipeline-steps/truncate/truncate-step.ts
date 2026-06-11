@@ -1,12 +1,12 @@
 /**
- * Applies the final markdown body size budget for a pipeline run.
+ * Applies the final body size budget for a pipeline run.
  *
  * The step preserves the current title and writes a new body version only when
- * content exceeds the configured target. The truncation suffix is counted inside
- * the target budget.
+ * content exceeds the configured target. Skips when the current body is binary.
+ * The truncation suffix is counted inside the target budget.
  */
 
-import type { PipelineContext } from "../../../contracts/pipeline/context.js";
+import { isTextBody, type PipelineContext } from "../../../contracts/pipeline/context.js";
 import type { PipelineStep, StepResult } from "../../../contracts/pipeline/step.js";
 import type { Logger } from "../../../shared/logger.js";
 import type { TruncateStepOptions } from "./truncate-step-config.js";
@@ -25,6 +25,7 @@ export class TruncateStep implements PipelineStep {
   async run(ctx: PipelineContext): Promise<StepResult> {
     const body = ctx.body.current();
     if (!body) return { status: "skipped", reason: "no_body" };
+    if (!isTextBody(body)) return { status: "skipped", reason: "unsupported_media_type" };
     const inputChars = body.content.length;
     if (this.config.targetChars === 0 || inputChars <= this.config.targetChars)
       return { status: "skipped", reason: "under_target" };
@@ -32,7 +33,7 @@ export class TruncateStep implements PipelineStep {
     const truncated = truncateToBudget(body.content, this.config.targetChars);
     return {
       status: "ok",
-      effects: { body: { content: truncated, title: body.title } }
+      effects: { body: { kind: "text", content: truncated, mediaType: body.mediaType, title: body.title } }
     };
   }
 }

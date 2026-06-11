@@ -14,6 +14,7 @@ import { readYaml } from "./read-yaml.js";
 import { rawYamlConfigSchema, type RawYamlConfig } from "./yaml-config.js";
 
 import type { AppConfig } from "../app-config.js";
+import type { EngineConfig } from "../../engine/engine-config.js";
 
 /** Loads, substitutes, validates, and translates one YAML configuration file. */
 export async function loadYamlAppConfig(args: {
@@ -30,12 +31,27 @@ export async function loadYamlAppConfig(args: {
 
 /** Translates parsed YAML into the app-level configuration envelope. */
 export function yamlToAppConfig(yamlConfig: RawYamlConfig): AppConfig {
+  const referencedPipelines = new Set(Object.values(yamlConfig.httpAdapters).map(a => a.pipeline));
+  const pipelines: Record<string, EngineConfig["pipelines"][string]> = {};
+  for (const [name, p] of Object.entries(yamlConfig.pipelines)) {
+    if (referencedPipelines.has(name) && p.enabled === false)
+      throw new ConfigurationError(
+        `Pipeline '${name}' is referenced by an HTTP adapter but disabled (enabled: false)`,
+        "disabled_pipeline_referenced"
+      );
+    pipelines[name] = {
+      outputRenderer: p.outputRenderer,
+      limiters: p.limiters,
+      steps: p.steps as EngineConfig["pipelines"][string]["steps"],
+      enabled: p.enabled === undefined ? referencedPipelines.has(name) : p.enabled
+    };
+  }
   return {
     engineConfig: {
       sourceProviders: yamlConfig.sourceProviders,
       llmProviders: yamlConfig.llmProviders,
       outputRenderers: yamlConfig.outputRenderers,
-      pipelines: yamlConfig.pipelines
+      pipelines
     },
     adapters: { http: yamlConfig.httpAdapters },
     metadata: { schemaVersion: yamlConfig.schemaVersion }

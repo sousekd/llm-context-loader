@@ -6,7 +6,7 @@
  * logger identity fields.
  */
 
-import { buildNamedRegistry } from "./build-named-registry.js";
+import { buildNamedRegistry, type BuiltNameTracking } from "./build-named-registry.js";
 
 import type {
   OutputRendererDescriptor,
@@ -17,12 +17,12 @@ import type { Logger } from "../../../shared/logger.js";
 import type { EngineConfig } from "../../engine-config.js";
 
 /** Constructs output renderers from configured output renderer entries. */
-export async function buildOutputRenderers(
+export function buildOutputRenderers(
   rawRenderers: EngineConfig["outputRenderers"],
   tools: HostTools,
   logger: Logger,
   descriptors: Readonly<Record<string, OutputRendererDescriptor>>
-): Promise<OutputRendererRegistry> {
+): OutputRendererRegistry & BuiltNameTracking {
   return buildNamedRegistry({
     rawEntries: rawRenderers,
     descriptors,

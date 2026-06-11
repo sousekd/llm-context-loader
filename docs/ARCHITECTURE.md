@@ -66,7 +66,7 @@ scripts/                     developer smoke helpers
 The current built-ins are:
 
 - HTTP adapters: `open-webui`, `jina`.
-- Source providers: `firecrawl`.
+- Source providers: `http`, `firecrawl`, `docling`.
 - LLM providers: `openai-chat`.
 - Pipeline steps: `load-source`, `llm-pass`, `truncate`, `capture-urls`, `verify-urls`.
 - Output renderers: `debug-xml`, `passthrough`.
@@ -98,6 +98,15 @@ One important boundary is explicit in the architecture test: `src/core/` must no
 ## Core Pipeline
 
 `src/core/` is the framework-free runtime engine. It does not know about Firecrawl, OpenAI, Open WebUI, Jina, or provider categories.
+
+The pipeline body is a **discriminated union** (`TextBody | BinaryBody`), discriminated on `kind`:
+
+- **Text bodies** (`kind: "text"`) carry `content` as a `string` and are the payload text-only steps read and write.
+- **Binary bodies** (`kind: "binary"`) carry `bytes` as a `Uint8Array` and are carried through the pipeline for conversion by a later step.
+
+A binary body that reaches the end of the pipeline without being converted is treated as a **failed run** with the error `unconverted_binary: <mediaType>`.
+
+Run reports use representation-neutral length diagnostics: `initial_length` and `final_length` are characters for text bodies and bytes for binary bodies. `ratio` is reported only when the first and final body have the same representation.
 
 Key pieces:
 
@@ -158,10 +167,12 @@ Bootstrap environment is intentionally small and parsed by `src/config/env-confi
 The YAML document is translated to `AppConfig` before runtime construction:
 
 1. `src/config/yaml/yaml-config.ts` validates the coarse YAML shape: `httpAdapters`, `outputRenderers`, `sourceProviders`, `llmProviders`, and `pipelines`.
-2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata.
+2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata. Pipeline activation follows a tri-state `enabled`: `true` compiles, `false` parks it, **omitted** activates only when an HTTP adapter references it.
 3. Each built-in descriptor parses its own `config` block with a local schema during engine or adapter construction.
 
-YAML environment substitution happens before schema validation. See [CONFIGURATION.md](CONFIGURATION.md) for default operation and [CUSTOMIZATION.md](CUSTOMIZATION.md) for YAML structure.
+YAML environment substitution happens before schema validation. A missing `${VAR}` with no `:-` default resolves to `""` so the env layer never throws for unused config. Required-ness is owned by reachable built-in schemas, not by substitution.
+
+**Lazy validation**: providers and output renderers are built and validated only when an active pipeline references them. An unused provider with missing env vars does not fail startup.
 
 `EngineConfig` excludes adapter declarations and schema metadata. `AppConfig` is the app-level envelope that pairs `engineConfig` with adapter configuration such as `adapters.http`.
 

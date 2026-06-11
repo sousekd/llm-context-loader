@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 
-import { emptyStringAsUndefined } from "../../shared/config-coercion.js";
+import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../../shared/config-coercion.js";
 
 const providerEntrySchema = z
   .object({
@@ -45,6 +45,7 @@ export const rawYamlConfigSchema = z
     pipelines: z.record(
       z
         .object({
+          enabled: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().optional()),
           outputRenderer: z.string().min(1).default("passthrough"),
           limiters: z.record(z.preprocess(emptyStringAsUndefined, z.coerce.number().int().positive())).default({}),
           steps: z.array(stepSchema).default([])

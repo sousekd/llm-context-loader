@@ -34,9 +34,16 @@ HTTP adapters also name the pipeline they expose:
 ```yaml
 some-adapter:
   type: open-webui
-  pipeline: default
+  pipeline: ${DEFAULT_PIPELINE:-truncate}
   config: {}
 ```
+
+Each pipeline has an optional `enabled` field (tri-state: `true`, `false`, or omitted). When
+omitted, a pipeline is active only when at least one HTTP adapter references it. Setting
+`enabled: false` parks it. Setting `enabled: true` pins it active regardless of adapter
+references. The shipped pipelines leave `enabled` omitted, so `DEFAULT_PIPELINE` alone drives
+the active set. Active-set pipelines are compiled and validated at startup; inactive ones are
+skipped (their providers are never built).
 
 Pipeline steps include common orchestration fields plus a type-specific `config` block:
 
@@ -93,7 +100,7 @@ config:
   includeSkipped: false
 ```
 
-Appends an XML diagnostic footer to the body. If the pipeline produced no body, the footer is returned by itself. `includeSkipped` defaults to `false`; set it to `true` to list skipped steps in the footer.
+Appends an XML diagnostic footer to the body. If the pipeline produced no body, or the final body is binary, the footer is returned by itself. Body lengths in the footer are characters for text and bytes for binary. `includeSkipped` defaults to `false`; set it to `true` to list skipped steps in the footer.
 
 ### `passthrough`
 
@@ -101,9 +108,28 @@ Appends an XML diagnostic footer to the body. If the pipeline produced no body, 
 config: {}
 ```
 
-Returns the current body without a diagnostic footer. If the pipeline failed before producing a body, returns the pipeline error message.
+Returns the current text body without a diagnostic footer. If the pipeline failed before producing a text body, returns the pipeline error message.
 
 ## Source Providers
+
+### `http`
+
+```yaml
+config:
+  userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+  maxBytes: 5000000
+  titleFromHtml: true
+```
+
+| Knob            | Values | Default             | Purpose                                                                                                                                                                                                                                                |
+| --------------- | ------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `userAgent`     | string | Chrome 124 Linux UA | User-Agent header sent with the fetch request.                                                                                                                                                                                                         |
+| `maxBytes`      | int    | `5000000`           | Response body size cap. The body is read as a stream and the connection is cancelled once the cap is reached, so memory stays bounded. When the cap truncates the body, the document is flagged truncated and the load-source step reports `degraded`. |
+| `titleFromHtml` | bool   | `true`              | When enabled, extracts the first `<title>` tag content from the HTML response.                                                                                                                                                                         |
+
+**Security caveat — testing only.** This provider fetches the input URL directly with no SSRF protection. It is intended as a zero-dependency testing fallback — no `baseUrl`, no `apiKey`, no external service required.
+
+The provider preserves textual response media types from `Content-Type` (`text/*`, JSON, XML, and structured `+json`/`+xml` types). Missing `Content-Type` defaults to `text/plain` when the body passes the text sniff. Binary responses are returned as binary bodies; mislabeled text-like responses containing NUL bytes are reclassified as `application/octet-stream`. If a binary body reaches the end of the pipeline without a converter, the run fails with `unconverted_binary: <mediaType>` instead of returning raw bytes.
 
 ### `firecrawl`
 
@@ -111,12 +137,39 @@ Returns the current body without a diagnostic footer. If the pipeline failed bef
 config:
   baseUrl: ${FIRECRAWL_BASE_URL}
   apiKey: ${FIRECRAWL_API_KEY:-}
+  output: markdown
   onlyMainContent: true
-  formats: [markdown]
-  maxAge: 0
+  stripBase64Images: true
+  parsePdf: true
 ```
 
-The provider calls `/v2/scrape` and returns markdown plus an optional title. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors.
+| Knob                | Values                            | Default    | Purpose                                                                                                                                   |
+| ------------------- | --------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is the full JS-rendered DOM (use for Readability testing). |
+| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                              |
+| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.          |
+| `parsePdf`          | bool                              | `true`     | When enabled Firecrawl parses PDF files to markdown via `parsers: ["pdf"]`.                                                               |
+
+The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent). `output: markdown` returns `text/markdown`; `output: html` and `output: rawHtml` return `text/html`.
+
+### `docling`
+
+```yaml
+config:
+  baseUrl: ${DOCLING_BASE_URL}
+  apiKey: ${DOCLING_API_KEY:-}
+  output: markdown
+  doOcr: true
+  tableMode: accurate
+```
+
+| Knob        | Values               | Default    | Purpose                                                                                                                                                |
+| ----------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `output`    | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
+| `doOcr`     | bool                 | `true`     | Run OCR on scanned documents and images within PDFs.                                                                                                   |
+| `tableMode` | `fast` \| `accurate` | `accurate` | Table extraction quality. `accurate` is slower but better for complex layouts.                                                                         |
+
+The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name` (the JSON format is always requested internally regardless of the `output` setting). Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
 
 ## LLM Providers
 
@@ -171,7 +224,7 @@ Adjacent steps that share the same `concurrencyGroup` share one limiter acquisit
 
 ```yaml
 config:
-  provider: default-firecrawl
+  provider: ${SOURCE_PROVIDER:-default-http}
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.
@@ -192,9 +245,10 @@ config:
       targetChars: 25000
 ```
 
-Runs a prompt-rendered LLM transformation against the current body. The step skips when:
+Runs a prompt-rendered LLM transformation against the current text body. The step skips when:
 
 - there is no body (`no_body`)
+- the current body is binary (`unsupported_media_type`)
 - input is shorter than `minInputChars`, when set (`too_short`)
 - input is longer than `maxInputChars`, when set (`too_long`)
 - the provider reports the rendered prompt plus the reserved output cannot fit the model context window (`context_overflow`)
@@ -212,7 +266,7 @@ Both templates are required. `templates.vars` is an optional map of literal valu
 | ------------------ | ------------------------------------------------- |
 | `url`              | Input URL for this pipeline run.                  |
 | `title`            | Current body title, when available.               |
-| `content`          | Current markdown body content.                    |
+| `content`          | Current text body content.                        |
 | `templates.vars.*` | Any keys declared under `templates.vars` in YAML. |
 
 Mustache escaping is disabled for prompt templates so markdown is passed through as-is.

@@ -1,16 +1,16 @@
 schemaVersion: 1
 
-# HTTP adapters expose the default pipeline through client-specific contracts.
+# HTTP adapters expose the selected pipeline through client-specific contracts.
 httpAdapters:
   open-webui:
     type: open-webui
-    pipeline: default
+    pipeline: ${DEFAULT_PIPELINE:-truncate}
     config:
       auth:
         bearerToken: ${OWUI_AUTH_TOKEN:-}
   jina:
     type: jina
-    pipeline: default
+    pipeline: ${DEFAULT_PIPELINE:-truncate}
     config:
       auth:
         bearerToken: ${JINA_AUTH_TOKEN:-}
@@ -28,50 +28,78 @@ outputRenderers:
 
 # Source providers turn an input URL into source markdown.
 sourceProviders:
+  default-http:
+    type: http
+    config:
+      userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+      maxBytes: 5000000
+      titleFromHtml: true
   default-firecrawl:
     type: firecrawl
     config:
-      baseUrl: ${FIRECRAWL_BASE_URL}
+      baseUrl: ${FIRECRAWL_BASE_URL:-}
       apiKey: ${FIRECRAWL_API_KEY:-}
+      output: markdown
       onlyMainContent: true
-      formats: [markdown]
-      maxAge: 0
+      stripBase64Images: true
+      parsePdf: true
+  default-docling:
+    type: docling
+    config:
+      baseUrl: ${DOCLING_BASE_URL:-}
+      apiKey: ${DOCLING_API_KEY:-}
+      output: markdown
+      doOcr: true
+      tableMode: accurate
 
 # LLM providers run prompt-rendered chat-completions passes.
 llmProviders:
   default-llm:
     type: openai-chat
     config:
-      baseUrl: ${LLM_BASE_URL}
+      baseUrl: ${LLM_BASE_URL:-}
       apiKey: ${LLM_API_KEY:-}
-      model: ${LLM_MODEL}
+      model: ${LLM_MODEL:-}
       contextTokens: ${LLM_CONTEXT_TOKENS:-}
       charsPerToken: ${LLM_CHARS_PER_TOKEN:-3.5}
       safetyMarginTokens: ${LLM_SAFETY_MARGIN_TOKENS:-128}
       extraBody: {}
 
-# The default pipeline fetches, cleans, verifies URLs, summarizes, and caps output size.
+# Shipped pipelines. DEFAULT_PIPELINE selects which is active (truncate by default).
 pipelines:
-  default:
+  truncate:
+    outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
+    limiters:
+      source: ${SOURCE_CONCURRENCY:-1}
+    steps:
+      - type: load-source
+        name: fetch
+        concurrencyGroup: source
+        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+        config:
+          provider: ${SOURCE_PROVIDER:-default-http}
+      - type: truncate
+        name: truncate
+        config:
+          targetChars: ${OUTPUT_TARGET_CHARS:-25000}
+
+  clean-llm:
     outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
     limiters:
       source: ${SOURCE_CONCURRENCY:-1}
       llm: ${LLM_CONCURRENCY:-1}
     steps:
-      # Fetch source markdown and keep source work in the source limiter group.
       - type: load-source
-        name: firecrawl
+        name: fetch
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: default-firecrawl
-      # Capture trusted source URLs before any LLM pass can alter the body.
+          provider: ${SOURCE_PROVIDER:-default-firecrawl}
       - type: capture-urls
         name: capture_source_urls
         concurrencyGroup: source
         config:
           artifact: trusted-urls
-      # Clean readable source markdown while preserving roughly the original budget.
       - type: llm-pass
         name: clean
         concurrencyGroup: llm
@@ -83,7 +111,6 @@ pipelines:
           templates:
             system: ../templates/clean.system.md
             user: ../templates/clean.user.md
-      # Roll back to source content when the clean pass introduces new URLs.
       - type: verify-urls
         name: verify_after_clean
         concurrencyGroup: llm
@@ -91,7 +118,6 @@ pipelines:
           artifact: trusted-urls
           onHallucination: rollback
           maxReportedUrls: 0
-      # Summarize only once content exceeds the target output size.
       - type: llm-pass
         name: summarize
         concurrencyGroup: llm
@@ -105,7 +131,6 @@ pipelines:
             user: ../templates/summarize.user.md
             vars:
               targetChars: ${OUTPUT_TARGET_CHARS:-25000}
-      # Report summary URL drift without replacing the current body.
       - type: verify-urls
         name: verify_after_summarize
         concurrencyGroup: llm
@@ -113,7 +138,6 @@ pipelines:
           artifact: trusted-urls
           onHallucination: report
           maxReportedUrls: 50
-      # Enforce the final hard character budget.
       - type: truncate
         name: truncate
         config:

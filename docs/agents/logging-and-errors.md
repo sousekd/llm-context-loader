@@ -43,7 +43,7 @@ Logging uses pino.
 
 Common identity fields include `component`, `source_provider`, `llm_provider`, `http_adapter`, `output_renderer`, `pipeline`, `step`, `type`, and `step_index`.
 
-Common per-call fields include `duration_ms`, `input_chars`, `output_chars`, `upstream_code`, `upstream_status`, `url_count`, `ok_count`, `degraded_count`, `failed_count`, and `err`.
+Common per-call fields include `duration_ms`, `input_length`, `output_length`, `upstream_code`, `upstream_status`, `url_count`, `ok_count`, `degraded_count`, `failed_count`, and `err`.
 
 Use snake_case for structured log fields.
 

@@ -12,9 +12,9 @@ import { emptyStringAsUndefined } from "../../../shared/config-coercion.js";
 
 const openAiChatConfigSchema = z
   .object({
-    baseUrl: z.string().url(),
+    baseUrl: z.string().min(1, "openai-chat baseUrl is required").url("openai-chat baseUrl must be a valid URL"),
     apiKey: z.string().default(""),
-    model: z.string().min(1),
+    model: z.string().min(1, "openai-chat model is required"),
     extraBody: z.record(z.unknown()).default({}),
     contextTokens: z.preprocess(emptyStringAsUndefined, z.coerce.number().int().positive().optional()),
     charsPerToken: z.preprocess(emptyStringAsUndefined, z.coerce.number().positive().default(3.5)),

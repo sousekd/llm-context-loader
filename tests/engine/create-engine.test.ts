@@ -6,6 +6,7 @@ import type { PipelineStepDescriptor } from "../../src/contracts/pipeline/step.j
 import { createEngine } from "../../src/engine/create-engine.js";
 import { createTestHostTools } from "../helpers/host-tools.js";
 import { createTestLogger } from "../helpers/logger.js";
+import { markdownRendererDescriptor } from "./renderer-descriptor.js";
 
 describe("createEngine", () => {
   it("constructs, lists, and runs pipelines without YAML or HTTP", async () => {
@@ -16,6 +17,7 @@ describe("createEngine", () => {
         outputRenderers: { markdown: { type: "markdown", config: {} } },
         pipelines: {
           default: {
+            enabled: true,
             outputRenderer: "markdown",
             limiters: {},
             steps: [{ type: "static-body", name: "write_body", timeoutSeconds: 5, config: { content: "hello engine" } }]
@@ -64,16 +66,13 @@ describe("createEngine", () => {
   });
 });
 
-const markdownRendererDescriptor = {
-  type: "markdown",
-  parseConfig: () => ({}),
-  create: () => ({ render: input => ({ markdown: input.body?.content ?? "" }) })
-} satisfies OutputRendererDescriptor<unknown>;
-
 const staticBodyStepDescriptor = {
   type: "static-body",
   parseConfig: raw => raw as { content: string },
   create: ({ config }) => ({
-    run: async () => ({ status: "ok" as const, effects: { body: { content: config.content } } })
+    run: async () => ({
+      status: "ok" as const,
+      effects: { body: { kind: "text", content: config.content, mediaType: "text/markdown" } }
+    })
   })
 } satisfies PipelineStepDescriptor<{ content: string }>;

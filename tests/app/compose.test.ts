@@ -31,7 +31,7 @@ describe("composeApp", () => {
     expect(loaded.registries.llmProviders.require("default-llm").name).toBe("default-llm");
     expect(
       loaded.registries.pipelines.find(pipeline => pipeline.name === "default")?.steps.map(entry => entry.name)
-    ).toEqual(["firecrawl", "clean", "truncate"]);
+    ).toEqual(["fetch", "clean", "truncate"]);
     expect(loaded.adapters.http.map(adapter => adapter.name)).toEqual(["open-webui"]);
     expect(logs.some(log => log.level === "warn" && log.message === "Adapter bearer auth is disabled.")).toBe(true);
   });
@@ -45,7 +45,7 @@ describe("composeApp", () => {
         logger: createTestLogger(),
         httpFetch: fetch
       })
-    ).rejects.toThrow("required env FIRECRAWL_BASE_URL not set");
+    ).rejects.toThrow("Invalid config for source provider 'default-firecrawl'");
 
     const missingTemplate = await writeConfigFixture(defaultYaml(), false);
     await expect(
@@ -74,7 +74,7 @@ describe("composeApp", () => {
     ).rejects.toThrow("Duplicate step name");
 
     const unknownField = await writeConfigFixture(
-      defaultYaml().replace("      maxAge: 0", "      maxAge: 0\n      mystery: true")
+      defaultYaml().replace("      stripBase64Images: true", "      stripBase64Images: true\n      mystery: true")
     );
     await expect(
       composeApp({
@@ -120,7 +120,7 @@ describe("composeApp", () => {
     const fixture = await writeConfigFixture(
       defaultYaml()
         .replace("onlyMainContent: true", "onlyMainContent: ${FIRECRAWL_ONLY_MAIN:-}")
-        .replace("maxAge: 0", "maxAge: ${FIRECRAWL_MAX_AGE:-}")
+        .replace("stripBase64Images: true", "stripBase64Images: ${FIRECRAWL_STRIP_IMAGES:-}")
         .replace("includeSkipped: true", "includeSkipped: ${DEBUG_XML_INCLUDE_SKIPPED:-}")
         .replace(
           "        config:\n          provider: default-llm",
@@ -135,7 +135,7 @@ describe("composeApp", () => {
       env: {
         FIRECRAWL_BASE_URL: "https://firecrawl.example",
         FIRECRAWL_ONLY_MAIN: "false",
-        FIRECRAWL_MAX_AGE: "",
+        FIRECRAWL_STRIP_IMAGES: "",
         LLM_BASE_URL: "https://llm.example/v1",
         LLM_MODEL: "model",
         DEBUG_XML_INCLUDE_SKIPPED: "false",
@@ -162,7 +162,7 @@ describe("composeApp", () => {
       .require("default-firecrawl")
       .provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(firecrawlRequestBody).toMatchObject({ onlyMainContent: false, maxAge: 0 });
+    expect(firecrawlRequestBody).toMatchObject({ onlyMainContent: false, removeBase64Images: true });
   });
 
   it("rejects unknown registry references and invalid diagnostic names", async () => {
@@ -248,9 +248,10 @@ function defaultYaml(): string {
     config:
       baseUrl: \${FIRECRAWL_BASE_URL}
       apiKey: \${FIRECRAWL_API_KEY:-}
+      output: markdown
       onlyMainContent: true
-      formats: [markdown]
-      maxAge: 0
+      stripBase64Images: true
+      parsePdf: true
 llmProviders:
   default-llm:
     type: openai-chat
@@ -273,7 +274,7 @@ pipelines:
       llm: \${LLM_CONCURRENCY:-1}
     steps:
       - type: load-source
-        name: firecrawl
+        name: fetch
         concurrencyGroup: source
         config:
           provider: default-firecrawl

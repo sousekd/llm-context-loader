@@ -9,19 +9,27 @@
 # Smoke scripts are best-effort: a single bad URL must not abort the run.
 $ErrorActionPreference = 'Continue'
 
-# Standard set of footer attributes printed by Write-SmokeSummary. Kept here
-# so smoke-owui and smoke-jina produce byte-identical breakdown sections.
-$script:SmokeFooterAttrs = @(
-  @{ Attr = 'returned'; Label = 'Returned breakdown' },
-  @{ Attr = 'result'; Label = 'Pipeline result breakdown' },
-  @{ Node = 'firecrawl'; Attr = 'status'; LegacyAttr = 'fetch_status'; Label = 'Fetch status breakdown' },
-  @{ Node = 'capture_source_urls'; Attr = 'status'; Label = 'Capture-urls status breakdown' },
-  @{ Node = 'clean'; Attr = 'status'; LegacyAttr = 'clean_status'; Label = 'Clean status breakdown' },
-  @{ Node = 'verify_after_clean'; Attr = 'status'; Label = 'Verify-after-clean status breakdown' },
-  @{ Node = 'summarize'; Attr = 'status'; LegacyAttr = 'summarize_status'; Label = 'Summarize status breakdown' },
-  @{ Node = 'verify_after_summarize'; Attr = 'status'; Label = 'Verify-after-summarize status breakdown' },
-  @{ Node = 'truncate'; Attr = 'status'; LegacyAttr = 'truncate_status'; Label = 'Truncate status breakdown' }
-)
+# Return an ordered list of direct-child step elements from a diagnostic footer
+# as [pscustomobject]@{ Name, Status, Reason }. Returns empty list on parse
+# failure so callers degrade gracefully to root-attribute-only output.
+function Get-LoaderFooterSteps {
+  param([string] $Footer)
+  if (-not $Footer) { return @() }
+  $steps = New-Object System.Collections.Generic.List[object]
+  try {
+    $xml = [xml]$Footer
+    foreach ($child in $xml.DocumentElement.ChildNodes) {
+      if ($child.NodeType -ne 'Element') { continue }
+      $steps.Add([pscustomobject]@{
+        Name   = $child.LocalName
+        Status = $child.GetAttribute('status')
+        Reason = $child.GetAttribute('reason')
+      })
+    }
+  }
+  catch { }
+  return ,$steps
+}
 
 # Read the loader base URL + optional bearer from the environment.
 function Get-LoaderDefaults {
@@ -209,22 +217,19 @@ function ConvertTo-UrlSlug {
   return $slug
 }
 
-# Tally one footer attribute across rows and print a sorted breakdown block.
-# `$Rows` items must expose a `.footer` string property.
+# Tally one root-level footer attribute across rows and print a sorted breakdown
+# block. `$Rows` items must expose a `.footer` string property. Only root-level
+# attributes (e.g. `returned`, `result`) are read; per-step status is handled by
+# Write-StepStatusBreakdown via Get-LoaderFooterSteps.
 function Write-FooterBreakdown {
   param(
     [object[]] $Rows,
     [string]   $AttrName,
-    [string]   $Label,
-    [string]   $NodeName,
-    [string]   $LegacyAttrName
+    [string]   $Label
   )
   $byAttr = @{}
   foreach ($row in $Rows) {
-    $value = ''
-    if ($NodeName) { $value = Get-LoaderFooterNodeAttr -Footer $row.footer -NodeName $NodeName -AttrName $AttrName }
-    if (-not $value -and $LegacyAttrName) { $value = Get-LoaderFooterAttr -Footer $row.footer -AttrName $LegacyAttrName }
-    if (-not $value) { $value = Get-LoaderFooterAttr -Footer $row.footer -AttrName $AttrName }
+    $value = Get-LoaderFooterAttr -Footer $row.footer -AttrName $AttrName
     if (-not $value) { continue }
     if (-not $byAttr.ContainsKey($value)) { $byAttr[$value] = 0 }
     $byAttr[$value]++
@@ -236,9 +241,40 @@ function Write-FooterBreakdown {
   }
 }
 
-# Print the standard per-URL block, an aggregate summary line, and the five
-# footer attribute breakdowns. Used by every smoke script so their output is
-# identical down to the wording. `$Results` items must expose:
+# Tally the `status` attribute of each direct-child step element across rows,
+# printing one breakdown block per discovered step name. Step names are
+# discovered in first-seen order across rows. Grandchildren with a `status`
+# attribute are never enumerated.
+function Write-StepStatusBreakdown {
+  param([Parameter(Mandatory)] [object[]] $Rows)
+  # Collect ordered union of step names and tally status per step across rows.
+  $firstSeen = New-Object System.Collections.Generic.List[string]
+  $seen = @{}
+  # Map<name, Map<status, count>>
+  $byStep = @{}
+  foreach ($row in $Rows) {
+    $steps = Get-LoaderFooterSteps -Footer $row.footer
+    foreach ($step in $steps) {
+      $n = $step.Name
+      $s = $step.Status
+      if (-not $n -or -not $s) { continue }
+      if (-not $seen.ContainsKey($n)) { $seen[$n] = $true; $firstSeen.Add($n) }
+      if (-not $byStep.ContainsKey($n)) { $byStep[$n] = @{} }
+      if (-not $byStep[$n].ContainsKey($s)) { $byStep[$n][$s] = 0 }
+      $byStep[$n][$s]++
+    }
+  }
+  foreach ($n in $firstSeen) {
+    Write-Output ("{0} status breakdown:" -f $n)
+    $byStep[$n].GetEnumerator() | Sort-Object Key | ForEach-Object {
+      Write-Output ("  {0,-22} {1}" -f $_.Key, $_.Value)
+    }
+  }
+}
+
+# Print the standard per-URL block, an aggregate summary line, root-level footer
+# breakdowns, and per-step status breakdowns. Used by every smoke script so
+# their output is identical down to the wording. `$Results` items must expose:
 #   .url, .ok, .len, .ms, .footer, .error
 function Write-SmokeSummary {
   param(
@@ -274,12 +310,9 @@ function Write-SmokeSummary {
   Write-Output ("{0}  urls: {1}  ok: {2}  fail: {3}  wall: {4}ms" -f $Header, $Results.Count, $ok, $fail, $WallMs)
 
   $footerRows = $Results | Where-Object { $_.footer }
-  foreach ($entry in $script:SmokeFooterAttrs) {
-    Write-FooterBreakdown `
-      -Rows $footerRows `
-      -AttrName $entry['Attr'] `
-      -Label $entry['Label'] `
-      -NodeName $entry['Node'] `
-      -LegacyAttrName $entry['LegacyAttr']
+  if ($footerRows.Count -gt 0) {
+    Write-FooterBreakdown -Rows $footerRows -AttrName 'returned' -Label 'Returned breakdown'
+    Write-FooterBreakdown -Rows $footerRows -AttrName 'result' -Label 'Pipeline result breakdown'
+    Write-StepStatusBreakdown -Rows $footerRows
   }
 }

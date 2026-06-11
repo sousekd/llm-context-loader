@@ -1,12 +1,15 @@
 /**
- * Runs prompt-rendered LLM transformations against the current markdown body.
+ * Runs prompt-rendered LLM transformations against the current text body.
  *
- * The step owns provider failure classification for LLM calls, template-render
+ * Skips without error when the current body is binary — the step operates on
+ * text only. Owns provider failure classification for LLM calls, template-render
  * failure handling, input length gates, and character-based context-fit checks.
- * It preserves the current body title when the LLM returns replacement content.
+ * Preserves the current body title when the LLM returns replacement content.
  */
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
+
+import { isTextBody } from "../../../contracts/pipeline/context.js";
 
 import type { LlmProvider } from "../../../contracts/extensions/llm-provider.js";
 import type { PipelineContext } from "../../../contracts/pipeline/context.js";
@@ -27,6 +30,7 @@ export class LlmPassStep implements PipelineStep {
   async run(ctx: PipelineContext): Promise<StepResult> {
     const body = ctx.body.current();
     if (!body) return { status: "skipped", reason: "no_body" };
+    if (!isTextBody(body)) return { status: "skipped", reason: "unsupported_media_type" };
     if (this.config.minInputChars !== undefined && body.content.length < this.config.minInputChars)
       return { status: "skipped", reason: "too_short" };
     if (this.config.maxInputChars !== undefined && body.content.length > this.config.maxInputChars)
@@ -61,7 +65,10 @@ export class LlmPassStep implements PipelineStep {
       );
       const text = result.text.trim();
       if (!text) return { status: "failed", reason: "empty_response" };
-      return { status: "ok", effects: { body: { content: text, title: body.title } } };
+      return {
+        status: "ok",
+        effects: { body: { kind: "text", content: text, mediaType: body.mediaType, title: body.title } }
+      };
     } catch (error) {
       return classifyLlmPassFailure(error);
     }

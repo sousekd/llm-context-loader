@@ -6,6 +6,14 @@ import { createTestLogger } from "../../../helpers/logger.js";
 import { makeStepContext } from "../utils.js";
 
 describe("CaptureUrlsStep", () => {
+  it("skips on binary body", async () => {
+    const step = new CaptureUrlsStep({ artifact: "trusted-urls" }, { logger: createTestLogger() });
+
+    const result = await step.run(makeStepContext({ body: { bytes: new Uint8Array([1, 2, 3]) } }));
+
+    expect(result).toMatchObject({ status: "skipped", reason: "unsupported_media_type" });
+  });
+
   it("skips when no body is present", async () => {
     const step = new CaptureUrlsStep({ artifact: "trusted-urls" }, { logger: createTestLogger() });
 

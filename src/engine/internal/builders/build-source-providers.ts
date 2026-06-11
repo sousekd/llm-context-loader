@@ -6,7 +6,7 @@
  * logger identity fields.
  */
 
-import { buildNamedRegistry } from "./build-named-registry.js";
+import { buildNamedRegistry, type BuiltNameTracking } from "./build-named-registry.js";
 
 import type {
   SourceProviderDescriptor,
@@ -17,12 +17,12 @@ import type { Logger } from "../../../shared/logger.js";
 import type { EngineConfig } from "../../engine-config.js";
 
 /** Constructs source providers from configured source provider entries. */
-export async function buildSourceProviders(
+export function buildSourceProviders(
   rawProviders: EngineConfig["sourceProviders"],
   tools: HostTools,
   logger: Logger,
   descriptors: Readonly<Record<string, SourceProviderDescriptor>>
-): Promise<SourceProviderRegistry> {
+): SourceProviderRegistry & BuiltNameTracking {
   return buildNamedRegistry({
     rawEntries: rawProviders,
     descriptors,

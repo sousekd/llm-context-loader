@@ -23,6 +23,7 @@ export interface EngineStepConfig {
 
 /** Configures one pipeline before runtime construction. */
 export interface EnginePipelineConfig {
+  readonly enabled: boolean;
   readonly outputRenderer: string;
   readonly limiters: Readonly<Record<string, number>>;
   readonly steps: ReadonlyArray<EngineStepConfig>;

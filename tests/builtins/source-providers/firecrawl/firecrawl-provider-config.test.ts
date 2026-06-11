@@ -6,20 +6,42 @@ import { parseFirecrawlConfig } from "../../../../src/builtins/source-providers/
 describe("parseFirecrawlConfig", () => {
   it("applies defaults and coerces env-substituted scalar strings", () => {
     expect(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" })).toMatchObject({
+      output: "markdown",
       onlyMainContent: true,
-      maxAge: 0
+      stripBase64Images: true,
+      parsePdf: true
     });
     expect(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", onlyMainContent: " false ", maxAge: "30" })
+      parseFirecrawlConfig({
+        baseUrl: "https://firecrawl.example",
+        output: "html",
+        onlyMainContent: " false ",
+        stripBase64Images: " false ",
+        parsePdf: " false "
+      })
     ).toMatchObject({
+      output: "html",
       onlyMainContent: false,
-      maxAge: 30
+      stripBase64Images: false,
+      parsePdf: false
     });
     expect(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", onlyMainContent: "", maxAge: "" })
+      parseFirecrawlConfig({
+        baseUrl: "https://firecrawl.example",
+        onlyMainContent: "",
+        stripBase64Images: "",
+        parsePdf: ""
+      })
     ).toMatchObject({
       onlyMainContent: true,
-      maxAge: 0
+      stripBase64Images: true,
+      parsePdf: true
+    });
+  });
+
+  it("accepts rawHtml output", () => {
+    expect(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" })).toMatchObject({
+      output: "rawHtml"
     });
   });
 
@@ -27,7 +49,11 @@ describe("parseFirecrawlConfig", () => {
     expect(() => parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", onlyMainContent: "yes" })).toThrow();
   });
 
-  it("rejects invalid numeric limits", () => {
-    expect(() => parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", maxAge: "abc" })).toThrow();
+  it("rejects invalid output values", () => {
+    expect(() => parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markup" })).toThrow();
+  });
+
+  it("rejects unknown fields", () => {
+    expect(() => parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", maxAge: 0 })).toThrow();
   });
 });

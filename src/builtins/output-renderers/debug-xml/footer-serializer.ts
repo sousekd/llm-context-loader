@@ -22,8 +22,8 @@ export function serializeFooter(report: PipelineReport, options: FooterSerialize
   assertDiagnosticName(options.rootElement);
   const rootAttrs: Record<string, DiagnosticValue | undefined> = {
     url: report.url,
-    initial_chars: report.initialChars,
-    final_chars: report.finalChars,
+    initial_length: report.initialLength,
+    final_length: report.finalLength,
     ratio: report.ratio === undefined ? undefined : report.ratio.toFixed(3),
     duration_ms: report.durationMs,
     returned: report.returned,
@@ -47,8 +47,8 @@ function renderStep(step: StepReport, indent: number): string {
     status: step.status,
     reason: step.reason,
     duration_ms: step.durationMs,
-    input_chars: step.inputChars,
-    output_chars: step.outputChars,
+    input_length: step.inputLength,
+    output_length: step.outputLength,
     ...step.diagnostics?.attributes
   };
   return renderNode({ name: step.name, attributes: attrs, children: step.diagnostics?.children }, indent);
