@@ -8,6 +8,7 @@
 
 import { ConfigurationError } from "../shared/errors.js";
 
+import type { ContentTransformerRegistry } from "../contracts/extensions/content-transformer.js";
 import type { LlmProviderRegistry } from "../contracts/extensions/llm-provider.js";
 import type { OutputRendererRegistry } from "../contracts/extensions/output-renderer.js";
 import type { SourceProviderRegistry } from "../contracts/extensions/source-provider.js";
@@ -17,6 +18,7 @@ import type { PipelineHandle, PipelineRunOutput } from "../contracts/pipeline/ha
 /** Registries of engine-owned configured runtime instances. */
 export interface EngineRegistries {
   readonly sourceProviders: SourceProviderRegistry;
+  readonly contentTransformers: ContentTransformerRegistry;
   readonly llmProviders: LlmProviderRegistry;
   readonly outputRenderers: OutputRendererRegistry;
 }

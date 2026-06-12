@@ -4,7 +4,12 @@ import { describe, expect, it } from "vitest";
 import type { LlmProvider, LlmProviderRegistry } from "../../src/contracts/extensions/llm-provider.js";
 import type { ResourceLoader } from "../../src/contracts/host/host-tools.js";
 import type { SourceProvider, SourceProviderRegistry } from "../../src/contracts/extensions/source-provider.js";
+import type {
+  ContentTransformer,
+  ContentTransformerRegistry
+} from "../../src/contracts/extensions/content-transformer.js";
 import { DEFAULT_ENGINE_DESCRIPTOR_BUNDLE } from "../../src/bundles/default-engine-descriptors.js";
+import { contentTransformerRegistryKey } from "../../src/contracts/extensions/content-transformer.js";
 import { llmProviderRegistryKey } from "../../src/contracts/extensions/llm-provider.js";
 import { sourceProviderRegistryKey } from "../../src/contracts/extensions/source-provider.js";
 import { createExtensionServicesBuilder } from "../../src/engine/internal/extension-services.js";
@@ -16,7 +21,7 @@ describe("default engine descriptor bundle", () => {
     const firecrawl = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.sourceProviders.firecrawl;
     const firecrawlConfig = firecrawl.parseConfig({ baseUrl: "https://firecrawl.example" });
     const firecrawlProvider = await firecrawl.create({
-      name: "default-firecrawl",
+      name: "firecrawl-markdown",
       config: firecrawlConfig,
       deps: { tools: createTestHostTools({ httpFetch: async () => new Response("{}") }), logger: createTestLogger() }
     });
@@ -24,13 +29,39 @@ describe("default engine descriptor bundle", () => {
     const openAi = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.llmProviders["openai-chat"];
     const openAiConfig = openAi.parseConfig({ baseUrl: "https://llm.example/v1", model: "model" });
     const openAiProvider = await openAi.create({
-      name: "default-llm",
+      name: "llm-default",
       config: openAiConfig,
       deps: { tools: createTestHostTools({ httpFetch: async () => new Response("{}") }), logger: createTestLogger() }
     });
 
     expect(firecrawlProvider.load).toEqual(expect.any(Function));
     expect(openAiProvider.chat).toEqual(expect.any(Function));
+  });
+
+  it("round-trips the mdream content transformer descriptor", async () => {
+    const mdream = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.contentTransformers.mdream;
+    const config = mdream.parseConfig({});
+    const transformer = await mdream.create({
+      name: "mdream-convert",
+      config,
+      deps: { tools: createTestHostTools(), logger: createTestLogger() }
+    });
+
+    expect(transformer.supports).toEqual(expect.any(Function));
+    expect(transformer.transform).toEqual(expect.any(Function));
+  });
+
+  it("round-trips the readability content transformer descriptor", async () => {
+    const readability = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.contentTransformers.readability;
+    const config = readability.parseConfig({ minContentLength: "200", minScore: "15", maxElements: "0" });
+    const transformer = await readability.create({
+      name: "readability-default",
+      config,
+      deps: { tools: createTestHostTools(), logger: createTestLogger() }
+    });
+
+    expect(transformer.supports).toEqual(expect.any(Function));
+    expect(transformer.transform).toEqual(expect.any(Function));
   });
 
   it("round-trips step descriptors through parse and create", async () => {
@@ -72,10 +103,23 @@ describe("default engine descriptor bundle", () => {
       services,
       deps
     });
+    const transformConfig = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.pipelineSteps.transform.parseConfig({
+      transformer: "content-transformer",
+      target: "text/markdown"
+    });
+    const transformStep = await DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.pipelineSteps.transform.create({
+      name: "transform",
+      type: "transform",
+      timeoutSeconds: 60,
+      config: transformConfig,
+      services,
+      deps
+    });
 
     expect(loadSourceStep.run).toEqual(expect.any(Function));
     expect(llmStep.run).toEqual(expect.any(Function));
     expect(truncateStep.run).toEqual(expect.any(Function));
+    expect(transformStep.run).toEqual(expect.any(Function));
   });
 });
 
@@ -91,7 +135,32 @@ function servicesWithProviders(sourceProvider: SourceProvider, llmProvider: LlmP
   const builder = createExtensionServicesBuilder();
   builder.register(sourceProviderRegistryKey, providerRegistry("source-provider", sourceProvider));
   builder.register(llmProviderRegistryKey, providerRegistry("llm-provider", llmProvider));
+  builder.register(
+    contentTransformerRegistryKey,
+    contentTransformerRegistry("content-transformer", contentTransformer())
+  );
   return builder.build();
+}
+
+function contentTransformer(): ContentTransformer {
+  return {
+    supports: () => true,
+    transform: async () => ({
+      outcome: "transformed",
+      body: { kind: "text", mediaType: "text/markdown", content: "md" }
+    })
+  };
+}
+
+function contentTransformerRegistry(expectedName: string, transformer: ContentTransformer): ContentTransformerRegistry {
+  const wrap = { name: expectedName, type: "test", transformer };
+  return {
+    require: (name: string) => {
+      if (name !== expectedName) throw new Error(`Unknown transformer: ${name}`);
+      return wrap;
+    },
+    tryGet: (name: string) => (name === expectedName ? wrap : undefined)
+  };
 }
 
 function providerRegistry<TProvider>(

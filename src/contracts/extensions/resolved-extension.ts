@@ -7,6 +7,7 @@
  * identities without coupling implementations to app configuration.
  */
 
+import type { ContentTransformer } from "./content-transformer.js";
 import type { LlmProvider } from "./llm-provider.js";
 import type { OutputRenderer } from "./output-renderer.js";
 import type { SourceProvider } from "./source-provider.js";
@@ -16,6 +17,13 @@ export interface ResolvedSourceProvider {
   readonly name: string;
   readonly type: string;
   readonly provider: SourceProvider;
+}
+
+/** Pairs a configured content transformer instance with its identity. */
+export interface ResolvedContentTransformer {
+  readonly name: string;
+  readonly type: string;
+  readonly transformer: ContentTransformer;
 }
 
 /** Pairs a configured LLM provider instance with its identity. */

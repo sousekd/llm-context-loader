@@ -24,6 +24,7 @@ interface ClassifiedSource {
 type SourceLayer =
   | "adapter-http"
   | "bundles"
+  | "builtins-content-transformer"
   | "builtins-http-adapter"
   | "builtins-output-renderer"
   | "builtins-pipeline-step"
@@ -195,6 +196,8 @@ function classifySource(sourcePath: string): ClassifiedSource {
   if (sourcePath.startsWith("src/adapters/http/")) return { layer: "adapter-http" };
   if (sourcePath.startsWith("src/builtins/source-providers/"))
     return { layer: "builtins-provider", component: providerComponent(sourcePath, "source") };
+  if (sourcePath.startsWith("src/builtins/content-transformers/"))
+    return { layer: "builtins-content-transformer", component: contentTransformerComponent(sourcePath) };
   if (sourcePath.startsWith("src/builtins/llm-providers/"))
     return { layer: "builtins-provider", component: providerComponent(sourcePath, "llm") };
   if (sourcePath.startsWith("src/builtins/pipeline-steps/"))
@@ -211,6 +214,7 @@ function isAllowedImport(edge: ImportEdge, source: ClassifiedSource, target: Cla
   switch (source.layer) {
     case "bundles":
       return [
+        "builtins-content-transformer",
         "builtins-output-renderer",
         "builtins-pipeline-step",
         "builtins-provider",
@@ -237,6 +241,8 @@ function isAllowedImport(edge: ImportEdge, source: ClassifiedSource, target: Cla
         isAllowedBuiltinHttpAdapterImport(edge, source, target)
       );
     case "builtins-provider":
+      return ["contracts", "shared"].includes(target.layer) || isSameComponent(source, target);
+    case "builtins-content-transformer":
       return ["contracts", "shared"].includes(target.layer) || isSameComponent(source, target);
     case "builtins-pipeline-step":
       return ["contracts", "shared"].includes(target.layer) || isSameComponent(source, target);
@@ -282,9 +288,13 @@ function groupConcreteBuiltinImportsBySource(): Map<string, Set<string>> {
 }
 
 function isConcreteBuiltinLayer(layer: SourceLayer): boolean {
-  return ["builtins-http-adapter", "builtins-output-renderer", "builtins-pipeline-step", "builtins-provider"].includes(
-    layer
-  );
+  return [
+    "builtins-content-transformer",
+    "builtins-http-adapter",
+    "builtins-output-renderer",
+    "builtins-pipeline-step",
+    "builtins-provider"
+  ].includes(layer);
 }
 
 function isDescriptorBundleSource(sourcePath: string): boolean {
@@ -306,6 +316,11 @@ function providerComponent(sourcePath: string, category: "llm" | "source"): stri
 }
 
 function pipelineStepComponent(sourcePath: string): string | undefined {
+  const segments = sourcePath.split("/");
+  return segments.length > 4 ? segments[3] : undefined;
+}
+
+function contentTransformerComponent(sourcePath: string): string | undefined {
   const segments = sourcePath.split("/");
   return segments.length > 4 ? segments[3] : undefined;
 }

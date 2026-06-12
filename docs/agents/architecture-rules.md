@@ -34,7 +34,7 @@ Classify the file you are touching before editing it. If the change does not fit
 
 ## Placement Rules
 
-- New source provider, LLM provider, pipeline step, or output renderer: put implementation and descriptor under `src/builtins/...`, add its descriptor to `src/bundles/default-engine-descriptors.ts` only when it belongs in the default service bundle, and test under `tests/builtins/...`.
+- New source provider, content transformer, LLM provider, pipeline step, or output renderer: put implementation and descriptor under `src/builtins/...`, add its descriptor to `src/bundles/default-engine-descriptors.ts` only when it belongs in the default service bundle, and test under `tests/builtins/...`.
 - New HTTP adapter: put implementation, config, descriptor, and adapter-local helpers under `src/adapters/http/builtins/<name>/`, add it to `src/adapters/http/descriptor-bundle.ts` only when it belongs in the hosted default bundle, and test under `tests/adapters/http/builtins/<name>/`.
 - New adapter surface such as MCP or CLI: create a sibling under `src/adapters/<surface>/`, consume `EngineRuntime` or `PipelineHandle`, and update the architecture test in the same change.
 - New host singleton such as clock, cache, telemetry, persistence, or fetch policy: prefer a `HostTools` key in `src/contracts/host/host-tools.ts`, with the concrete host implementation wired from `src/app/`.

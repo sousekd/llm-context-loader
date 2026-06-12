@@ -16,9 +16,10 @@ Artifacts land in `scripts/out/` (gitignored).
 
 ## Picking URLs
 
-- Keep the set small — **5 URLs or fewer**. Each provider × surface × environment combination reruns the whole set, so it adds up fast.
+- Keep the set small — **5 URLs or fewer** unless the task explicitly asks for broader coverage. Each provider × surface × environment combination reruns the whole set, so it adds up fast.
 - Cover a couple of content shapes: at least one ordinary HTML article, and at least one real document (a true PDF, confirmed by content type rather than a `.pdf` in the path).
-- Skip raw images; they only produce binary-rejection results and teach nothing new.
+- Verify selected URLs with a lightweight `GET` and record content type before running the matrix. `HEAD` is not enough: some sites reject it, and docs URLs rot into 404s.
+- Skip raw images unless the task asks for a negative/control URL; they usually produce binary-rejection or tiny metadata-only results.
 
 ```powershell
 # gather-urls.ps1 reads SEARX_BASE from the environment and does NOT load .env.
@@ -49,6 +50,9 @@ npm run dev
 # In a second terminal:
 ./scripts/smoke-jina.ps1 -UrlFile scripts/out/urls-smoke.txt -Concurrency 2
 ./scripts/smoke-owui.ps1 -UrlFile scripts/out/urls-smoke.txt -Concurrency 2 -BatchSize 3
+
+# Quick inline smoke test (no script needed):
+curl.exe -s --max-time 30 "http://localhost:3010/r/$([System.Uri]::EscapeDataString('https://en.wikipedia.org/wiki/Rust_(programming_language)'))" | Select-String -Pattern '<loader_info' -Context 0,15
 
 # Stop the server before switching providers so the port frees up:
 Get-Process -Name node -ErrorAction SilentlyContinue |
@@ -94,9 +98,13 @@ Each run prints a per-URL block and then aggregate breakdowns. When the `debug-x
 
 The summary block tallies `ok` / `fail` and per-step status counts (`ok`, `skipped`, `degraded`, `failed`) across the set. `skipped` is normal: a step opts out when it does not apply to that URL.
 
+The smoke scripts print a compact footer preview. When a task asks for full diagnostic footers, save raw responses or run a follow-up pass that uses `Get-LoaderFooterLine` from `shared-lib.ps1` and writes the full footer text or JSON to `scripts/out/`.
+
 For the OWUI surface the per-URL time column is the **batch** time shared by every URL in the batch, not a per-URL figure. Jina times are per request.
 
 When the script output is not enough, read the server logs: pipeline start/finish lines carry the URL, outcome, and duration, and step warnings carry a `reason`. To dig into a single URL, use `inspect-suspects.ps1`.
+
+A `result="failed"` with `final_length=0` does not imply a pipeline bug by itself. Check the step entries in the footer: was the fetch step `ok`? Did all steps that should run actually run? A footer step showing `empty_output` is normal for 404 pages, paywalled content, or JavaScript-rendered SPAs — the pipeline cannot salvage those. Look at each step's `status` and `reason` before deciding something is wrong.
 
 ## Common Traps
 
@@ -108,7 +116,13 @@ When the script output is not enough, read the server logs: pipeline start/finis
 - [ ] `-HealthTimeoutSec 30` on Docker runs so the healthcheck can pass first?
 - [ ] Low `-Concurrency` (e.g. 2) for providers that call an LLM or remote service? They are slow per URL.
 - [ ] OWUI time column read as a batch time, not per URL?
+- [ ] URLs verified with `GET` and content type before the matrix? Do not rely on `HEAD` alone.
 - [ ] "PDF" URLs confirmed as real PDFs by content type, not just by their path?
+- [ ] Full diagnostic footers needed? The smoke scripts show previews; capture raw responses or use `Get-LoaderFooterLine` for complete footers.
+- [ ] Writing ad hoc PowerShell summaries? Collect objects into an array, then pipe the array. A one-line `foreach { ... } | Format-*` after a control block can parse as an empty pipe.
+- [ ] Checking the footer by hand: use `Select-String -Pattern '<loader_info'` to grab just the footer from a raw `curl` response. Piping through `Out-String -Width 200` avoids truncation artifacts.
+- [ ] `result="failed"` with `final_length=0` is normal for 404 pages, paywalled content, and SPAs that render content via JavaScript. Check the per-step entries in the footer before debugging pipeline code.
+- [ ] URLs rot. Verify a URL actually loads the expected content (e.g. on a separate tab or with a raw fetch) before reading too much into footers. Prefer stable sources like Wikipedia for baseline pipeline health checks.
 
 ## Cleanup
 

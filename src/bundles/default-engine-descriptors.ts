@@ -6,12 +6,15 @@
  * engine construction never imports this bundle directly.
  */
 
+import { mdreamTransformerDescriptor } from "../builtins/content-transformers/mdream/mdream-transformer-descriptor.js";
+import { readabilityTransformerDescriptor } from "../builtins/content-transformers/readability/readability-transformer-descriptor.js";
 import { openAiChatProviderDescriptor } from "../builtins/llm-providers/openai-chat/openai-chat-provider-descriptor.js";
 import { debugXmlRendererDescriptor } from "../builtins/output-renderers/debug-xml/debug-xml-renderer-descriptor.js";
 import { passthroughRendererDescriptor } from "../builtins/output-renderers/passthrough/passthrough-renderer-descriptor.js";
 import { captureUrlsStepDescriptor } from "../builtins/pipeline-steps/capture-urls/capture-urls-step-descriptor.js";
 import { llmPassStepDescriptor } from "../builtins/pipeline-steps/llm-pass/llm-pass-step-descriptor.js";
 import { loadSourceStepDescriptor } from "../builtins/pipeline-steps/load-source/load-source-step-descriptor.js";
+import { transformStepDescriptor } from "../builtins/pipeline-steps/transform/transform-step-descriptor.js";
 import { truncateStepDescriptor } from "../builtins/pipeline-steps/truncate/truncate-step-descriptor.js";
 import { verifyUrlsStepDescriptor } from "../builtins/pipeline-steps/verify-urls/verify-urls-step-descriptor.js";
 import { httpProviderDescriptor } from "../builtins/source-providers/http/http-provider-descriptor.js";
@@ -19,6 +22,7 @@ import { firecrawlProviderDescriptor } from "../builtins/source-providers/firecr
 import { doclingProviderDescriptor } from "../builtins/source-providers/docling/docling-provider-descriptor.js";
 import { createDescriptorRecord } from "../shared/descriptors.js";
 
+import type { ContentTransformerDescriptor } from "../contracts/extensions/content-transformer.js";
 import type { LlmProviderDescriptor } from "../contracts/extensions/llm-provider.js";
 import type { OutputRendererDescriptor } from "../contracts/extensions/output-renderer.js";
 import type { SourceProviderDescriptor } from "../contracts/extensions/source-provider.js";
@@ -27,6 +31,7 @@ import type { PipelineStepDescriptor } from "../contracts/pipeline/step.js";
 /** Engine-facing descriptor bundle selected by the hosted service by default. */
 export interface EngineDescriptorBundle {
   readonly sourceProviders: Readonly<Record<string, SourceProviderDescriptor>>;
+  readonly contentTransformers: Readonly<Record<string, ContentTransformerDescriptor>>;
   readonly llmProviders: Readonly<Record<string, LlmProviderDescriptor>>;
   readonly outputRenderers: Readonly<Record<string, OutputRendererDescriptor>>;
   readonly pipelineSteps: Readonly<Record<string, PipelineStepDescriptor>>;
@@ -36,6 +41,10 @@ export interface EngineDescriptorBundle {
 export const DEFAULT_ENGINE_DESCRIPTOR_BUNDLE: EngineDescriptorBundle = Object.freeze({
   sourceProviders: createDescriptorRecord(
     [httpProviderDescriptor, firecrawlProviderDescriptor, doclingProviderDescriptor],
+    descriptor => descriptor.type
+  ),
+  contentTransformers: createDescriptorRecord(
+    [mdreamTransformerDescriptor, readabilityTransformerDescriptor],
     descriptor => descriptor.type
   ),
   llmProviders: createDescriptorRecord([openAiChatProviderDescriptor], descriptor => descriptor.type),
@@ -48,6 +57,7 @@ export const DEFAULT_ENGINE_DESCRIPTOR_BUNDLE: EngineDescriptorBundle = Object.f
       captureUrlsStepDescriptor,
       loadSourceStepDescriptor,
       llmPassStepDescriptor,
+      transformStepDescriptor,
       truncateStepDescriptor,
       verifyUrlsStepDescriptor
     ],

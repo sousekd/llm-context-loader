@@ -13,6 +13,7 @@ describe("createEngine", () => {
     const engine = await createEngine({
       config: {
         sourceProviders: {},
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: { type: "markdown", config: {} } },
         pipelines: {
@@ -26,6 +27,7 @@ describe("createEngine", () => {
       },
       descriptors: {
         sourceProviders: {},
+        contentTransformers: {},
         llmProviders: {},
         outputRenderers: { markdown: markdownRendererDescriptor },
         pipelineSteps: { "static-body": staticBodyStepDescriptor }
@@ -54,8 +56,14 @@ describe("createEngine", () => {
 
   it("reports unknown pipelines clearly", async () => {
     const engine = await createEngine({
-      config: { sourceProviders: {}, llmProviders: {}, outputRenderers: {}, pipelines: {} },
-      descriptors: { sourceProviders: {}, llmProviders: {}, outputRenderers: {}, pipelineSteps: {} },
+      config: { sourceProviders: {}, contentTransformers: {}, llmProviders: {}, outputRenderers: {}, pipelines: {} },
+      descriptors: {
+        sourceProviders: {},
+        contentTransformers: {},
+        llmProviders: {},
+        outputRenderers: {},
+        pipelineSteps: {}
+      },
       tools: createTestHostTools(),
       logger: createTestLogger()
     });

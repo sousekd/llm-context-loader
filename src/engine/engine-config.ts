@@ -32,6 +32,7 @@ export interface EnginePipelineConfig {
 /** Engine-only config. Excludes schema metadata and adapter configuration. */
 export interface EngineConfig {
   readonly sourceProviders: Readonly<Record<string, EngineComponentConfig>>;
+  readonly contentTransformers: Readonly<Record<string, EngineComponentConfig>>;
   readonly llmProviders: Readonly<Record<string, EngineComponentConfig>>;
   readonly outputRenderers: Readonly<Record<string, EngineComponentConfig>>;
   readonly pipelines: Readonly<Record<string, EnginePipelineConfig>>;

@@ -7,12 +7,14 @@
  * bundles, process bootstrap code, or concrete built-ins.
  */
 
+import { contentTransformerRegistryKey } from "../contracts/extensions/content-transformer.js";
 import { llmProviderRegistryKey } from "../contracts/extensions/llm-provider.js";
 import { outputRendererRegistryKey } from "../contracts/extensions/output-renderer.js";
 import { sourceProviderRegistryKey } from "../contracts/extensions/source-provider.js";
 import { PipelineOrchestrator } from "../core/pipeline/orchestrator.js";
 import { PipelineRunner } from "../core/pipeline/runner.js";
 import { createEngineRuntime } from "./engine-runtime.js";
+import { buildContentTransformers } from "./internal/builders/build-content-transformers.js";
 import { buildLlmProviders } from "./internal/builders/build-llm-providers.js";
 import { buildOutputRenderers } from "./internal/builders/build-output-renderers.js";
 import { buildPipelines } from "./internal/builders/build-pipelines.js";
@@ -40,6 +42,13 @@ export async function createEngine(args: {
     args.descriptors.sourceProviders
   );
   serviceBuilder.register(sourceProviderRegistryKey, sourceProviders);
+  const contentTransformers = buildContentTransformers(
+    args.config.contentTransformers,
+    args.tools,
+    args.logger,
+    args.descriptors.contentTransformers
+  );
+  serviceBuilder.register(contentTransformerRegistryKey, contentTransformers);
   const llmProviders = buildLlmProviders(
     args.config.llmProviders,
     args.tools,
@@ -65,6 +74,12 @@ export async function createEngine(args: {
   );
 
   logSkipped(args.logger, "source provider", Object.keys(args.config.sourceProviders), sourceProviders.builtNames());
+  logSkipped(
+    args.logger,
+    "content transformer",
+    Object.keys(args.config.contentTransformers),
+    contentTransformers.builtNames()
+  );
   logSkipped(args.logger, "LLM provider", Object.keys(args.config.llmProviders), llmProviders.builtNames());
   logSkipped(args.logger, "output renderer", Object.keys(args.config.outputRenderers), outputRenderers.builtNames());
 
@@ -72,7 +87,7 @@ export async function createEngine(args: {
     new PipelineOrchestrator({ logger: args.logger.child({ component: "orchestrator" }) })
   );
   const handles = new Map([...compiledPipelines].map(([name, pipeline]) => [name, runner.bindTo(pipeline)]));
-  const registries: EngineRegistries = { sourceProviders, llmProviders, outputRenderers };
+  const registries: EngineRegistries = { sourceProviders, contentTransformers, llmProviders, outputRenderers };
   return createEngineRuntime({ registries, pipelines: pipelineInfos(args.config), handles });
 }
 

@@ -26,15 +26,22 @@ outputRenderers:
     type: passthrough
     config: {}
 
-# Source providers turn an input URL into source markdown.
+# Source providers turn an input URL into a pipeline body.
 sourceProviders:
-  default-http:
+  http-default:
     type: http
     config:
       userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
       maxBytes: 5000000
       titleFromHtml: true
-  default-firecrawl:
+  firecrawl-html:
+    type: firecrawl
+    config:
+      baseUrl: ${FIRECRAWL_BASE_URL:-}
+      apiKey: ${FIRECRAWL_API_KEY:-}
+      output: rawHtml
+      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
+  firecrawl-markdown:
     type: firecrawl
     config:
       baseUrl: ${FIRECRAWL_BASE_URL:-}
@@ -42,8 +49,8 @@ sourceProviders:
       output: markdown
       onlyMainContent: true
       stripBase64Images: true
-      parsePdf: true
-  default-docling:
+      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
+  docling-ocr:
     type: docling
     config:
       baseUrl: ${DOCLING_BASE_URL:-}
@@ -52,9 +59,26 @@ sourceProviders:
       doOcr: true
       tableMode: accurate
 
+# Content transformers rewrite the body between representations (e.g. HTML to markdown).
+contentTransformers:
+  readability-default:
+    type: readability
+    config:
+      minContentLength: ${READABILITY_MIN_CONTENT_CHARS:-140}
+      minScore: ${READABILITY_MIN_SCORE:-20}
+      maxElements: ${READABILITY_MAX_ELEMENTS:-0}
+  mdream-convert:
+    type: mdream
+    config:
+      clean: ${MDREAM_CLEAN:-true}
+  mdream-aggressive:
+    type: mdream
+    config:
+      minimal: true
+
 # LLM providers run prompt-rendered chat-completions passes.
 llmProviders:
-  default-llm:
+  llm-default:
     type: openai-chat
     config:
       baseUrl: ${LLM_BASE_URL:-}
@@ -77,7 +101,38 @@ pipelines:
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: ${SOURCE_PROVIDER:-default-http}
+          provider: ${SOURCE_PROVIDER:-http-default}
+      - type: truncate
+        name: truncate
+        config:
+          targetChars: ${OUTPUT_TARGET_CHARS:-25000}
+
+  clean-deterministic:
+    outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
+    limiters:
+      source: ${SOURCE_CONCURRENCY:-1}
+      process: ${PROCESS_CONCURRENCY:-5}
+    steps:
+      - type: load-source
+        name: fetch
+        concurrencyGroup: source
+        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+        config:
+          provider: ${SOURCE_PROVIDER:-firecrawl-html}
+      - type: transform
+        name: clean
+        concurrencyGroup: process
+        config:
+          transformer: readability-default
+          target: text/html
+          emitDiagnostics: true
+      - type: transform
+        name: convert
+        concurrencyGroup: process
+        config:
+          transformer: mdream-convert
+          target: text/markdown
+          emitDiagnostics: true
       - type: truncate
         name: truncate
         config:
@@ -94,7 +149,7 @@ pipelines:
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: ${SOURCE_PROVIDER:-default-firecrawl}
+          provider: ${SOURCE_PROVIDER:-firecrawl-markdown}
       - type: capture-urls
         name: capture_source_urls
         concurrencyGroup: source
@@ -105,7 +160,7 @@ pipelines:
         concurrencyGroup: llm
         timeoutSeconds: ${CLEAN_TIMEOUT_SECONDS:-60}
         config:
-          provider: default-llm
+          provider: llm-default
           minInputChars: ${CLEAN_MIN_INPUT_CHARS:-1000}
           outputReserveRatio: 1.0
           templates:
@@ -123,7 +178,64 @@ pipelines:
         concurrencyGroup: llm
         timeoutSeconds: ${SUMMARIZE_TIMEOUT_SECONDS:-60}
         config:
-          provider: default-llm
+          provider: llm-default
+          minInputChars: ${OUTPUT_TARGET_CHARS:-25000}
+          outputReserveChars: ${OUTPUT_TARGET_CHARS:-25000}
+          templates:
+            system: ../templates/summarize.system.md
+            user: ../templates/summarize.user.md
+            vars:
+              targetChars: ${OUTPUT_TARGET_CHARS:-25000}
+      - type: verify-urls
+        name: verify_after_summarize
+        concurrencyGroup: llm
+        config:
+          artifact: trusted-urls
+          onHallucination: report
+          maxReportedUrls: 50
+      - type: truncate
+        name: truncate
+        config:
+          targetChars: ${OUTPUT_TARGET_CHARS:-25000}
+
+  clean-combined:
+    outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
+    limiters:
+      source: ${SOURCE_CONCURRENCY:-1}
+      process: ${PROCESS_CONCURRENCY:-5}
+      llm: ${LLM_CONCURRENCY:-1}
+    steps:
+      - type: load-source
+        name: fetch
+        concurrencyGroup: source
+        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+        config:
+          provider: ${SOURCE_PROVIDER:-firecrawl-html}
+      - type: transform
+        name: clean
+        concurrencyGroup: process
+        config:
+          transformer: readability-default
+          target: text/html
+          emitDiagnostics: true
+      - type: transform
+        name: convert
+        concurrencyGroup: process
+        config:
+          transformer: mdream-convert
+          target: text/markdown
+          emitDiagnostics: true
+      - type: capture-urls
+        name: capture_source_urls
+        concurrencyGroup: process
+        config:
+          artifact: trusted-urls
+      - type: llm-pass
+        name: summarize
+        concurrencyGroup: llm
+        timeoutSeconds: ${SUMMARIZE_TIMEOUT_SECONDS:-60}
+        config:
+          provider: llm-default
           minInputChars: ${OUTPUT_TARGET_CHARS:-25000}
           outputReserveChars: ${OUTPUT_TARGET_CHARS:-25000}
           templates:

@@ -1,7 +1,7 @@
 /** Verifies media-type predicates and constants. */
 import { describe, expect, it } from "vitest";
 
-import { isTextLike, mediaTypes } from "../../src/shared/media-types.js";
+import { isTextLike, looksLikeHtml, mediaTypes } from "../../src/shared/media-types.js";
 
 describe("mediaTypes", () => {
   it("exports expected text media type constants", () => {
@@ -46,5 +46,39 @@ describe("isTextLike", () => {
 
   it("returns false for empty string", () => {
     expect(isTextLike("")).toBe(false);
+  });
+});
+
+describe("looksLikeHtml", () => {
+  it("returns true for text starting with <html>", () => {
+    expect(looksLikeHtml("<html><body>Hello</body></html>")).toBe(true);
+  });
+
+  it("returns true for text starting with <!DOCTYPE", () => {
+    expect(looksLikeHtml("<!DOCTYPE html>\n<html>")).toBe(true);
+  });
+
+  it("returns true with leading whitespace", () => {
+    expect(looksLikeHtml("  \n<html>")).toBe(true);
+  });
+
+  it("returns false for bare plain text", () => {
+    expect(looksLikeHtml("Dummy PDF file")).toBe(false);
+  });
+
+  it("returns false for markdown image reference", () => {
+    expect(looksLikeHtml("![](https://example.com/img.jpg)")).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(looksLikeHtml("")).toBe(false);
+  });
+
+  it("returns true for linkime-type HTML", () => {
+    expect(looksLikeHtml('<html style="height: 100%;"><head><meta name="viewport"></head></html>')).toBe(true);
+  });
+
+  it("returns false for markdown heading", () => {
+    expect(looksLikeHtml("# Hello world\n\nSome text")).toBe(false);
   });
 });

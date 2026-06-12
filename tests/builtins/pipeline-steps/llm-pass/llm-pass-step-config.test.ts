@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { parseLlmPassStepConfig } from "../../../../src/builtins/pipeline-steps/llm-pass/llm-pass-step-config.js";
 
 const baseConfig = {
-  provider: "default-llm",
+  provider: "llm-default",
   templates: { system: "system", user: "user" }
 };
 

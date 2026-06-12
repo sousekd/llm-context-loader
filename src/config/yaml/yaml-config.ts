@@ -40,6 +40,7 @@ export const rawYamlConfigSchema = z
   .object({
     schemaVersion: z.literal(1).default(1),
     sourceProviders: z.record(providerEntrySchema).default({}),
+    contentTransformers: z.record(providerEntrySchema).default({}),
     llmProviders: z.record(providerEntrySchema).default({}),
     outputRenderers: z.record(providerEntrySchema).default({}),
     pipelines: z.record(

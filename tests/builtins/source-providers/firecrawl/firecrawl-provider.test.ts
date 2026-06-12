@@ -69,6 +69,210 @@ describe("FirecrawlProvider", () => {
     expect(document).toEqual({ kind: "text", content: "<html><body>Raw</body></html>", mediaType: "text/html" });
   });
 
+  it("labels rawHtml PDF content as text/plain", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: {
+              rawHtml: "Dummy PDF file",
+              metadata: { contentType: "application/pdf" }
+            }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toEqual({
+      kind: "text",
+      content: "Dummy PDF file",
+      mediaType: "text/plain"
+    });
+  });
+
+  it("labels rawHtml image viewer as text/html", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "rawHtml" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: {
+              rawHtml:
+                '<html style="height:100%;"><body style="margin:0;"><img src="https://example.com/i.jpg"/></body></html>',
+              metadata: { contentType: "image/jpeg" }
+            }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.mediaType).toBe("text/html");
+  });
+
+  it("labels html PDF wrapper as text/html", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: {
+              html: "<html><body>Dummy PDF file</body></html>",
+              metadata: { contentType: "application/pdf" }
+            }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toEqual({
+      kind: "text",
+      content: "<html><body>Dummy PDF file</body></html>",
+      mediaType: "text/html"
+    });
+  });
+
+  it("labels markdown PDF content as text/markdown", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown" }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: {
+              markdown: "Dummy PDF file",
+              metadata: { contentType: "application/pdf" }
+            }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toEqual({
+      kind: "text",
+      content: "Dummy PDF file",
+      mediaType: "text/markdown"
+    });
+  });
+
+  it("returns binary body when parsePdf is false for a PDF", async () => {
+    const base64Payload = Buffer.from("%PDF-1.4 test document").toString("base64");
+    const fetchFn: typeof fetch = async (_input, init) => {
+      return jsonResponse({
+        success: true,
+        data: { markdown: base64Payload, metadata: { contentType: "application/pdf" } }
+      });
+    };
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown", parsePdf: false }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("binary");
+    if (document.kind === "binary") {
+      expect(document.mediaType).toBe("application/pdf");
+      expect(new TextDecoder().decode(document.bytes)).toBe("%PDF-1.4 test document");
+    }
+  });
+
+  it("strips html wrapper from binary base64 when parsePdf is false and output is html", async () => {
+    const payload = "<html><body>JVBERi0xLjQK</body></html>";
+    const fetchFn: typeof fetch = async () => {
+      return jsonResponse({
+        success: true,
+        data: { html: payload, metadata: { contentType: "application/pdf" } }
+      });
+    };
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html", parsePdf: false }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("binary");
+    if (document.kind === "binary") {
+      expect(new TextDecoder().decode(document.bytes)).toBe("%PDF-1.4\n");
+    }
+  });
+
+  it("returns text body when parsePdf is false for a non-PDF (HTML) source", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown", parsePdf: false }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: {
+              markdown: "# Hello from HTML",
+              metadata: { contentType: "text/html; charset=UTF-8" }
+            }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document).toEqual({
+      kind: "text",
+      content: "# Hello from HTML",
+      mediaType: "text/markdown"
+    });
+  });
+
+  it("returns text body when parsePdf is false for an image source", async () => {
+    const base64Payload = Buffer.from("RIFF fake").toString("base64");
+    const fetchFn: typeof fetch = async () => {
+      return jsonResponse({
+        success: true,
+        data: {
+          markdown: `![](https://example.com/img.jpg)`,
+          metadata: { contentType: "image/png" }
+        }
+      });
+    };
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    const document = await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(document.kind).toBe("text");
+  });
+
+  it("rejects empty base64 when parsePdf is false for PDF", async () => {
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
+      {
+        httpFetch: async () =>
+          jsonResponse({
+            success: true,
+            data: { markdown: "", metadata: { contentType: "application/pdf" } }
+          }),
+        logger: createTestLogger()
+      }
+    );
+
+    await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
+      upstreamCode: "empty"
+    });
+  });
+
   it("omits parsers when parsePdf is false", async () => {
     let requestBody: Record<string, unknown> | undefined;
     const fetchFn: typeof fetch = async (_input, init) => {

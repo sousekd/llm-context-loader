@@ -11,9 +11,10 @@ LLM Context Loader is a small HTTP service that turns URLs into markdown for LLM
 
 ## Current Shape
 
-- **Pipelines:** `truncate` (default, no LLM) and `clean-llm` (Firecrawl + LLM), selected via `DEFAULT_PIPELINE`.
+- **Pipelines:** `truncate` (default, no LLM), `clean-deterministic` (Firecrawl HTML + Readability + mdream, no LLM), `clean-llm` (Firecrawl + LLM), and `clean-combined` (Firecrawl HTML + Readability + mdream + LLM summarize), selected via `DEFAULT_PIPELINE`.
 - **Source providers:** native HTTP fetch, Firecrawl, Docling.
-- **LLM provider:** OpenAI-compatible `/chat/completions`.
+- **Content transformers:** `readability` (article HTML extraction), `mdream` (HTML to markdown).
+- **LLM providers:** OpenAI-compatible `/chat/completions`.
 - **Output renderers:** `debug-xml` and `passthrough`, selected per pipeline in YAML.
 
 ## Quick Start

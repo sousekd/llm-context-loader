@@ -30,7 +30,7 @@ HTTP adapter
 
 `src/main.ts` parses bootstrap environment, creates the root logger, loads app assembly, builds Fastify, and installs shutdown handling. `src/adapters/http/http-app.ts` owns Fastify setup, request correlation, shared error handling, the silent `/health` route, and adapter registration.
 
-`src/engine/create-engine.ts` is the programmatic engine boundary. It accepts `EngineConfig`, `EngineDescriptors`, `HostTools`, and a logger, then builds provider and output renderer registries, registers construction-time extension services, builds compiled pipelines internally, binds `PipelineHandle`s, and exposes `EngineRuntime`.
+`src/engine/create-engine.ts` is the programmatic engine boundary. It accepts `EngineConfig`, `EngineDescriptors`, `HostTools`, and a logger, then builds provider, content transformer, and output renderer registries, registers construction-time extension services, builds compiled pipelines internally, binds `PipelineHandle`s, and exposes `EngineRuntime`.
 
 `src/app/compose.ts` is the service assembly point. It loads `AppConfig` from YAML, builds the host-tools bag, calls `createEngine(...)`, and creates HTTP adapter plugins over engine-provided pipeline handles. The composed result type is `ComposedApp` with two top-level keys: `adapters` (the `http` adapter set) and `registries` (`sourceProviders`, `llmProviders`, `outputRenderers`, and pipeline discovery info).
 
@@ -44,11 +44,12 @@ src/
   core/                      framework-free pipeline engine (orchestrator, runner, effects, body store); `core/pipeline/` mirrors `contracts/pipeline/`
   contracts/                 framework-free contracts grouped by intent
     pipeline/                pipeline ports and types: step, diagnostics, context, report, and handle definitions
-    extensions/              source provider, LLM provider, output renderer, registry, and resolved wrapper contracts
+    extensions/              source provider, content transformer, LLM provider, output renderer, registry, and resolved wrapper contracts
     host/                    HostTools and ExtensionServices construction-time service contracts
   engine/                    programmatic engine API, EngineConfig, EngineRuntime, createEngine, and engine-local builders
   builtins/                  individual engine built-ins collected by descriptor bundles
     source-providers/
+    content-transformers/
     llm-providers/
     pipeline-steps/
     output-renderers/
@@ -67,8 +68,9 @@ The current built-ins are:
 
 - HTTP adapters: `open-webui`, `jina`.
 - Source providers: `http`, `firecrawl`, `docling`.
+- Content transformers: `readability`, `mdream`.
 - LLM providers: `openai-chat`.
-- Pipeline steps: `load-source`, `llm-pass`, `truncate`, `capture-urls`, `verify-urls`.
+- Pipeline steps: `load-source`, `llm-pass`, `transform`, `truncate`, `capture-urls`, `verify-urls`.
 - Output renderers: `debug-xml`, `passthrough`.
 
 ## Dependency Boundaries
@@ -82,6 +84,7 @@ The import graph is enforced by [tests/architecture/import-boundaries.test.ts](.
 - `src/adapters/http/` owns Fastify integration, HTTP adapter contracts, HTTP adapter construction, the HTTP descriptor bundle, and HTTP built-ins. Fastify imports are allowed only in this layer.
 - `src/adapters/http/builtins/<name>/` may import its own files, the shared adapter auth helper, HTTP adapter contracts, contracts, shared code, or external packages.
 - `src/builtins/source-providers/<impl>/` and `src/builtins/llm-providers/<impl>/` may import their own files, contracts, shared code, or external packages.
+- `src/builtins/content-transformers/<impl>/` may import their own files, contracts, shared code, or external packages.
 - `src/builtins/pipeline-steps/<type>/` may import their own files, contracts, shared code, or external packages.
 - `src/builtins/output-renderers/<type>/` may import their own files, contracts, shared code, or external packages.
 - `src/bundles/` collects engine built-in descriptors. It may import concrete engine built-ins, contracts, and shared helpers, but not HTTP adapter descriptors.
@@ -166,7 +169,7 @@ Bootstrap environment is intentionally small and parsed by `src/config/env-confi
 
 The YAML document is translated to `AppConfig` before runtime construction:
 
-1. `src/config/yaml/yaml-config.ts` validates the coarse YAML shape: `httpAdapters`, `outputRenderers`, `sourceProviders`, `llmProviders`, and `pipelines`.
+1. `src/config/yaml/yaml-config.ts` validates the coarse YAML shape: `httpAdapters`, `outputRenderers`, `sourceProviders`, `contentTransformers`, `llmProviders`, and `pipelines`.
 2. `src/config/yaml/yaml-app-config.ts` maps engine-owned sections to `AppConfig.engineConfig`, HTTP adapter declarations to `AppConfig.adapters.http`, and `schemaVersion` to app metadata. Pipeline activation follows a tri-state `enabled`: `true` compiles, `false` parks it, **omitted** activates only when an HTTP adapter references it.
 3. Each built-in descriptor parses its own `config` block with a local schema during engine or adapter construction.
 
