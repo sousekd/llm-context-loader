@@ -10,7 +10,7 @@
 import { z } from "zod";
 
 import { UpstreamError, isAbortError } from "../../../shared/errors.js";
-import { mediaTypes } from "../../../shared/media-types.js";
+import { looksLikeHtml, mediaTypes } from "../../../shared/media-types.js";
 import { joinUrl } from "../../../shared/urls.js";
 
 import type { SourceDocument, SourceProvider } from "../../../contracts/extensions/source-provider.js";
@@ -93,7 +93,28 @@ export class FirecrawlProvider implements SourceProvider {
           upstreamStatus: response.status
         });
       const title = data.title ?? (typeof metadata.title === "string" ? metadata.title : undefined);
-      const mediaType: string = this.config.output === "markdown" ? mediaTypes.markdown : mediaTypes.html;
+      const contentType = typeof metadata.contentType === "string" ? metadata.contentType : "";
+
+      if (!this.config.parsePdf) {
+        const essence = contentType.split(";", 1)[0].trim().toLowerCase();
+        if (essence === mediaTypes.pdf) {
+          const raw = extractBase64Payload(content, this.config.output);
+          if (!raw) {
+            throw new UpstreamError("Firecrawl returned empty base64 PDF payload", "empty", {
+              upstreamStatus: response.status
+            });
+          }
+          const bytes = Buffer.from(raw, "base64");
+          if (bytes.byteLength === 0) {
+            throw new UpstreamError("Firecrawl returned empty PDF bytes after base64 decode", "empty", {
+              upstreamStatus: response.status
+            });
+          }
+          return { kind: "binary", bytes, mediaType: mediaTypes.pdf, title };
+        }
+      }
+
+      const mediaType = deriveTextMediaType(this.config.output, content);
       return { kind: "text", content, mediaType, title };
     } catch (error) {
       if (error instanceof UpstreamError || isAbortError(error)) throw error;
@@ -107,4 +128,31 @@ export class FirecrawlProvider implements SourceProvider {
     if (this.config.apiKey) headers.authorization = `Bearer ${this.config.apiKey}`;
     return headers;
   }
+}
+
+/**
+ * Derives a truthful media type for the text returned by Firecrawl.
+ *
+ * - markdown output is always `text/markdown`.
+ * - html output is always `text/html` (Firecrawl wraps non-HTML content).
+ * - rawHtml is "raw": real HTML for web pages/sites, bare text for PDFs.
+ */
+function deriveTextMediaType(output: string, content: string): string {
+  if (output === "markdown") return mediaTypes.markdown;
+  if (output === "html") return mediaTypes.html;
+  return looksLikeHtml(content) ? mediaTypes.html : mediaTypes.plainText;
+}
+
+/**
+ * Extracts the base64-encoded payload from a Firecrawl response field.
+ *
+ * With parsers:[], Firecrawl returns base64 of the raw file bytes. When
+ * output=html, the base64 is wrapped in `<html><body>…</body></html>`;
+ * for markdown and rawHtml it is bare.
+ */
+function extractBase64Payload(content: string, output: string): string | undefined {
+  const trimmed = content.trim();
+  if (!trimmed) return undefined;
+  if (output !== "html") return trimmed;
+  return trimmed.replace(/^<html>(<body>)?/i, "").replace(/(<\/body>)?<\/html>$/i, "");
 }

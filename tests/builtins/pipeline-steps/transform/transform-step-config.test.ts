@@ -5,10 +5,11 @@ import { parseTransformStepConfig } from "../../../../src/builtins/pipeline-step
 
 describe("parseTransformStepConfig", () => {
   it("applies defaults for optional fields", () => {
-    expect(parseTransformStepConfig({ transformer: "mdream-default", target: "text/markdown" })).toEqual({
-      transformer: "mdream-default",
+    expect(parseTransformStepConfig({ transformer: "mdream-convert", target: "text/markdown" })).toEqual({
+      transformer: "mdream-convert",
       target: "text/markdown",
       onUnsupported: "skip",
+      onDeclined: "skip",
       emitDiagnostics: false
     });
   });
@@ -18,13 +19,25 @@ describe("parseTransformStepConfig", () => {
     expect(() => parseTransformStepConfig({ transformer: "x" })).toThrow();
   });
 
-  it("validates the onUnsupported enum and coerces emitDiagnostics", () => {
+  it("validates the onUnsupported and onDeclined enums and coerces emitDiagnostics", () => {
     expect(() =>
       parseTransformStepConfig({ transformer: "x", target: "text/markdown", onUnsupported: "explode" })
+    ).toThrow();
+    expect(() =>
+      parseTransformStepConfig({ transformer: "x", target: "text/markdown", onDeclined: "explode" })
     ).toThrow();
     expect(
       parseTransformStepConfig({ transformer: "x", target: "text/markdown", emitDiagnostics: "true" }).emitDiagnostics
     ).toBe(true);
+  });
+
+  it("parses explicit onDeclined values", () => {
+    expect(parseTransformStepConfig({ transformer: "x", target: "text/markdown", onDeclined: "fail" }).onDeclined).toBe(
+      "fail"
+    );
+    expect(parseTransformStepConfig({ transformer: "x", target: "text/markdown", onDeclined: "skip" }).onDeclined).toBe(
+      "skip"
+    );
   });
 
   it("rejects unknown keys", () => {

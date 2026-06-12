@@ -144,14 +144,22 @@ config:
   parsePdf: true
 ```
 
-| Knob                | Values                            | Default    | Purpose                                                                                                                                   |
-| ------------------- | --------------------------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is the full JS-rendered DOM (use for Readability testing). |
-| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                              |
-| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.          |
-| `parsePdf`          | bool                              | `true`     | When enabled Firecrawl parses PDF files to markdown via `parsers: ["pdf"]`.                                                               |
+| Knob                | Values                            | Default    | Purpose                                                                                                                                                                                                                                                                           |
+| ------------------- | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is "raw" — full JS-rendered DOM for web pages, viewer `<img>` wrapper for images, and bare extracted text for PDFs (use for Readability testing).                                                  |
+| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                                                                                                                                                                      |
+| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.                                                                                                                                                  |
+| `parsePdf`          | bool                              | `true`     | Configurable via `FIRECRAWL_PARSE_PDF`. When `true`, Firecrawl parses PDF files to extracted text. When `false`, raw PDF bytes are returned as a binary body (`application/pdf`) — the pipeline fails with `unconverted_binary` until a PDF converter (e.g. Docling) is wired up. |
 
-The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent). `output: markdown` returns `text/markdown`; `output: html` and `output: rawHtml` return `text/html`.
+The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent). The media type of returned bodies is derived truthfully:
+
+| `output` | HTML / docx source | image source    | PDF source (parsePdf:true) |
+| -------- | ------------------ | --------------- | -------------------------- |
+| markdown | `text/markdown`    | `text/markdown` | `text/markdown`            |
+| html     | `text/html`        | `text/html`     | `text/html` (wrapped)      |
+| rawHtml  | `text/html`        | `text/html`     | **`text/plain`**           |
+
+`rawHtml` is "raw": for web pages and images it returns HTML, but for PDFs it returns bare extracted text. The provider detects this by looking at whether the content starts with an HTML tag — if not, it labels it `text/plain` so downstream transformers (which gate on `isHtmlMediaType`) skip it correctly. When `parsePdf:false`, PDFs are returned as binary (`application/pdf`) from base64-decoded raw bytes supplied by Firecrawl's empty-`parsers` mode.
 
 ### `docling`
 
@@ -176,19 +184,50 @@ The provider calls `POST /v1/convert/source`. Title is read from `document.json_
 
 Content transformers convert a loaded body from one representation to another in-process, with no upstream call. The `transform` pipeline step selects a transformer by name and applies it to the current body.
 
+### `readability`
+
+Extracts main-article HTML from raw HTML using [Mozilla Readability](https://github.com/mozilla/readability). It uses `isProbablyReaderable` as a suitability gate: article-like pages become cleaned HTML; other pages return `declined` and keep the current body unchanged.
+
+```yaml
+config:
+  minContentLength: ${READABILITY_MIN_CONTENT_CHARS:-140}
+  minScore: ${READABILITY_MIN_SCORE:-20}
+  maxElements: ${READABILITY_MAX_ELEMENTS:-0}
+```
+
+| Knob               | Values       | Default | Purpose                                                                                              |
+| ------------------ | ------------ | ------- | ---------------------------------------------------------------------------------------------------- |
+| `minContentLength` | positive int | `140`   | Minimum content length for `isProbablyReaderable`.                                                   |
+| `minScore`         | number >= 0  | `20`    | Minimum readerable score for `isProbablyReaderable`.                                                 |
+| `maxElements`      | int >= 0     | `0`     | Maximum DOM elements Readability parses. `0` = unlimited (DoS guardrail). Maps to `maxElemsToParse`. |
+
+Supports text `text/html` or `application/xhtml+xml` bodies targeting `text/html`. The incoming title is preserved; when absent, the extracted article title is used instead.
+
+Decline reasons are `not_readerable` and `parse_empty`. Runtime errors propagate to the orchestrator; the failed step has no effect, so downstream steps continue from the prior body and the run rolls up as `degraded`.
+
 ### `mdream`
 
 Converts HTML bodies to markdown using the [`@mdream/js`](https://www.npmjs.com/package/@mdream/js) library. Pure-JS, no native dependencies.
 
+Two shipped instances are declared in the config:
+
+**`mdream-convert`** — used after `readability` in shipped pipelines. It converts HTML to markdown without re-extracting main content.
+
 ```yaml
 config:
-  minimal: ${MDREAM_MINIMAL:-true}
   clean: ${MDREAM_CLEAN:-true}
+```
+
+**`mdream-aggressive`** — extraction + conversion in one pass using mdream's minimal preset. Suitable for custom pipelines without a prior readability step.
+
+```yaml
+config:
+  minimal: true
 ```
 
 | Knob      | Values | Default | Purpose                                                                                                  |
 | --------- | ------ | ------- | -------------------------------------------------------------------------------------------------------- |
-| `minimal` | bool   | `true`  | Apply mdream's minimal preset (isolate main content, filter boilerplate). Takes precedence over `clean`. |
+| `minimal` | bool   | `false` | Apply mdream's minimal preset (isolate main content, filter boilerplate). Takes precedence over `clean`. |
 | `clean`   | bool   | `true`  | Clean up the markdown output: drop tracking params, redundant and empty links, and collapse blank lines. |
 
 The transformer supports text bodies whose media type is `text/html` or `application/xhtml+xml` and a requested target of `text/markdown`. The input URL is passed to mdream as the conversion origin, so relative links and images resolve against it. The original body title is preserved.
@@ -297,7 +336,7 @@ Mustache escaping is disabled for prompt templates so markdown is passed through
 
 ```yaml
 config:
-  transformer: mdream-default
+  transformer: mdream-convert
   target: text/markdown
   onUnsupported: skip
   emitDiagnostics: false
@@ -310,9 +349,10 @@ Applies a named content transformer to the current body. The step resolves `tran
 | `transformer`     | string           | —       | Name of a configured `contentTransformers` instance. Required.                                                 |
 | `target`          | string           | —       | Media type the transformer must produce, for example `text/markdown`. Required.                                |
 | `onUnsupported`   | `skip` \| `fail` | `skip`  | What to do when the transformer does not support the current body (wrong source media type or representation). |
+| `onDeclined`      | `skip` \| `fail` | `skip`  | What to do when the transformer returns `declined` (e.g. `not_readerable`, `parse_empty`).                     |
 | `emitDiagnostics` | bool             | `false` | When enabled, transformer-reported diagnostics are surfaced as child nodes in the step report.                 |
 
-The step skips with `no_body` when there is no body. When the transformer does not support the current body it skips with `unsupported`, or fails with that reason when `onUnsupported: fail`. A transform aborted by the step timeout fails with `timeout`. If the transformer returns a body that does not match `target`, the step fails with `wrong_output_type`.
+The step skips with `no_body` when there is no body. When the transformer does not support the current body it skips with `unsupported` (or fails with `onUnsupported: fail`). When the transformer returns `declined`, the step skips with that reason (or fails with `onDeclined: fail`). A transform aborted by the step timeout fails with `timeout`. If the transformer returns a body that does not match `target`, the step fails with `wrong_output_type`.
 
 ### `truncate`
 
@@ -358,7 +398,7 @@ Shipped defaults: `verify_after_clean` uses `rollback` with `maxReportedUrls: 0`
 
 ## Shipped Pipelines
 
-The config ships three pipelines, selected via `DEFAULT_PIPELINE` (defaults to `truncate`).
+The config ships four pipelines, selected via `DEFAULT_PIPELINE` (defaults to `truncate`).
 
 ### `truncate` (default)
 
@@ -371,10 +411,10 @@ Fetches the URL directly and truncates to budget. No external services required.
 ### `clean-deterministic`
 
 ```text
-load-source(firecrawl-html) -> transform(html -> markdown via mdream) -> truncate
+load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> truncate
 ```
 
-Loads HTML from the `firecrawl-html` source instance (Firecrawl with `output: rawHtml`) and converts it to markdown deterministically with the `mdream` transformer, with no LLM passes. Defaults `SOURCE_PROVIDER` to `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-deterministic`.
+Loads Firecrawl raw HTML, extracts article HTML with `readability` when suitable, converts HTML to markdown with `mdream`, then truncates. No LLM passes. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-deterministic`.
 
 ### `clean-llm`
 
@@ -382,4 +422,12 @@ Loads HTML from the `firecrawl-html` source instance (Firecrawl with `output: ra
 load-source(firecrawl-markdown) -> capture-urls -> llm-pass(clean) -> verify-urls(rollback) -> llm-pass(summarize) -> verify-urls(report) -> truncate
 ```
 
-The original reference pipeline. Loads markdown from a Firecrawl instance, runs clean and summarize LLM passes with URL-hallucination gates, then truncates. Defaults `SOURCE_PROVIDER` to `firecrawl-markdown`. Select with `DEFAULT_PIPELINE=clean-llm`.
+The original reference pipeline. Loads markdown from a Firecrawl instance, runs clean and summarize LLM passes with URL-hallucination gates, then truncates. Pipeline fallback: `firecrawl-markdown`. Select with `DEFAULT_PIPELINE=clean-llm`.
+
+### `clean-combined`
+
+```text
+load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> capture-urls -> llm-pass(summarize) -> verify-urls(report) -> truncate
+```
+
+Combines the deterministic HTML-to-markdown path with an LLM summarize pass. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-combined`.

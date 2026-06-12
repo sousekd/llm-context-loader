@@ -65,7 +65,16 @@ Implement `SourceProvider` (`src/contracts/extensions/source-provider.ts`). The 
 
 ### Content Transformers
 
-Implement `ContentTransformer` (`src/contracts/extensions/content-transformer.ts`): `supports({ sourceKind, sourceMediaType, request })` and `transform({ url, body, request }, { signal }): Promise<ContentTransformResult>`. `supports` gates `transform`: the step only invokes a matching transformer, so `transform` may throw `InternalError` for inputs that bypass the gate. Built-in example: `src/builtins/content-transformers/mdream/`.
+Implement `ContentTransformer` (`src/contracts/extensions/content-transformer.ts`): `supports({ sourceKind, sourceMediaType, request })` and `transform({ url, body, request }, { signal }): Promise<ContentTransformResult>`.
+
+The result type is a discriminated union:
+
+- `{ outcome: "transformed", body: BodyContent, diagnostics?: ContentTransformDiagnostic[] }` — the transformer performed a conversion. The step only applies effects on this branch and runs its honesty gate (`outputMatchesTarget`).
+- `{ outcome: "declined", reason?: string }` — the transformer chose not to transform (e.g. not suitable, empty parse). The step's `onDeclined` knob decides whether this becomes a skip or a failure. Declined outcomes never apply body effects, so the previous body version passes through unchanged.
+
+`supports` gates `transform`: the step only invokes a matching transformer, so `transform` may throw `InternalError` for inputs that bypass the gate. Use `declined` for deliberate "not suitable" decisions (e.g. `isProbablyReaderable` returned false).
+
+Built-in examples: `src/builtins/content-transformers/readability/` (article HTML extraction, outputs `declined`), `src/builtins/content-transformers/mdream/` (HTML to markdown, always `transformed`).
 
 ### LLM Providers
 

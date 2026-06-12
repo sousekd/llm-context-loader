@@ -11,8 +11,20 @@ import type {
 } from "../../../../src/contracts/extensions/content-transformer.js";
 import type { TransformStepOptions } from "../../../../src/builtins/pipeline-steps/transform/transform-step-config.js";
 
-const baseConfig: TransformStepOptions = { target: "text/markdown", onUnsupported: "skip", emitDiagnostics: false };
-const markdownResult: ContentTransformResult = { body: { kind: "text", mediaType: "text/markdown", content: "# md" } };
+const baseConfig: TransformStepOptions = {
+  target: "text/markdown",
+  onUnsupported: "skip",
+  onDeclined: "skip",
+  emitDiagnostics: false
+};
+const markdownResult: ContentTransformResult = {
+  outcome: "transformed",
+  body: { kind: "text", mediaType: "text/markdown", content: "# md" }
+};
+
+function declinedResult(reason?: string): ContentTransformResult {
+  return { outcome: "declined", reason };
+}
 
 function fakeTransformer(overrides: Partial<ContentTransformer> = {}): ContentTransformer {
   return {
@@ -92,6 +104,7 @@ describe("TransformStep", () => {
       { ...baseConfig, emitDiagnostics: true },
       fakeTransformer({
         transform: async () => ({
+          outcome: "transformed",
           body: markdownResult.body,
           diagnostics: [{ code: "mdream", message: "10 -> 4" }, { code: "empty_output" }]
         })
@@ -111,7 +124,12 @@ describe("TransformStep", () => {
   it("fails when the transformer returns a different media type", async () => {
     const step = makeStep(
       baseConfig,
-      fakeTransformer({ transform: async () => ({ body: { kind: "text", mediaType: "text/plain", content: "x" } }) })
+      fakeTransformer({
+        transform: async () => ({
+          outcome: "transformed",
+          body: { kind: "text", mediaType: "text/plain", content: "x" }
+        })
+      })
     );
 
     await expect(step.run(makeStepContext({ body: htmlBody }))).resolves.toMatchObject({
@@ -124,7 +142,10 @@ describe("TransformStep", () => {
     const step = makeStep(
       baseConfig,
       fakeTransformer({
-        transform: async () => ({ body: { kind: "binary", mediaType: "text/markdown", bytes: new Uint8Array([1]) } })
+        transform: async () => ({
+          outcome: "transformed",
+          body: { kind: "binary", mediaType: "text/markdown", bytes: new Uint8Array([1]) }
+        })
       })
     );
 
@@ -147,6 +168,36 @@ describe("TransformStep", () => {
     await expect(step.run(makeStepContext({ body: htmlBody }))).resolves.toMatchObject({
       status: "failed",
       reason: "timeout"
+    });
+  });
+
+  it("skips when the transformer declines with onDeclined default skip", async () => {
+    const step = makeStep(baseConfig, fakeTransformer({ transform: async () => declinedResult("not_readerable") }));
+
+    await expect(step.run(makeStepContext({ body: htmlBody }))).resolves.toMatchObject({
+      status: "skipped",
+      reason: "not_readerable"
+    });
+  });
+
+  it("fails when the transformer declines with onDeclined fail", async () => {
+    const step = makeStep(
+      { ...baseConfig, onDeclined: "fail" },
+      fakeTransformer({ transform: async () => declinedResult("not_readerable") })
+    );
+
+    await expect(step.run(makeStepContext({ body: htmlBody }))).resolves.toMatchObject({
+      status: "failed",
+      reason: "not_readerable"
+    });
+  });
+
+  it("surfaces a default declined reason when the transformer omits the reason", async () => {
+    const step = makeStep(baseConfig, fakeTransformer({ transform: async () => declinedResult() }));
+
+    await expect(step.run(makeStepContext({ body: htmlBody }))).resolves.toMatchObject({
+      status: "skipped",
+      reason: "declined"
     });
   });
 

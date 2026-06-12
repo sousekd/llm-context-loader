@@ -42,7 +42,9 @@
   },
   "dependencies": {
     "@mdream/js": "^1.3.0",
+    "@mozilla/readability": "^0.6.0",
     "fastify": "^5.2.1",
+    "linkedom": "^0.18.12",
     "mustache": "^4.2.0",
     "p-limit": "^6.2.0",
     "pino": "^9.6.0",

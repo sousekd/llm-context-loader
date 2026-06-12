@@ -7,6 +7,7 @@
  */
 
 import { mdreamTransformerDescriptor } from "../builtins/content-transformers/mdream/mdream-transformer-descriptor.js";
+import { readabilityTransformerDescriptor } from "../builtins/content-transformers/readability/readability-transformer-descriptor.js";
 import { openAiChatProviderDescriptor } from "../builtins/llm-providers/openai-chat/openai-chat-provider-descriptor.js";
 import { debugXmlRendererDescriptor } from "../builtins/output-renderers/debug-xml/debug-xml-renderer-descriptor.js";
 import { passthroughRendererDescriptor } from "../builtins/output-renderers/passthrough/passthrough-renderer-descriptor.js";
@@ -42,7 +43,10 @@ export const DEFAULT_ENGINE_DESCRIPTOR_BUNDLE: EngineDescriptorBundle = Object.f
     [httpProviderDescriptor, firecrawlProviderDescriptor, doclingProviderDescriptor],
     descriptor => descriptor.type
   ),
-  contentTransformers: createDescriptorRecord([mdreamTransformerDescriptor], descriptor => descriptor.type),
+  contentTransformers: createDescriptorRecord(
+    [mdreamTransformerDescriptor, readabilityTransformerDescriptor],
+    descriptor => descriptor.type
+  ),
   llmProviders: createDescriptorRecord([openAiChatProviderDescriptor], descriptor => descriptor.type),
   outputRenderers: createDescriptorRecord(
     [debugXmlRendererDescriptor, passthroughRendererDescriptor],

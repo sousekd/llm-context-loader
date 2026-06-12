@@ -72,13 +72,14 @@ describe("MdreamTransformer.transform", () => {
       { signal }
     );
 
+    expect(result.outcome).toBe("transformed");
+    if (result.outcome !== "transformed") throw new Error("Expected transformed outcome");
     expect(result.body.kind).toBe("text");
+    if (result.body.kind !== "text") throw new Error("Expected text body");
     expect(result.body.mediaType).toBe(mediaTypes.markdown);
     expect(result.body.title).toBe("Doc");
-    if (result.body.kind === "text") {
-      expect(result.body.content).toContain("# Hello");
-      expect(result.body.content).toContain("](https://example.com");
-    }
+    expect(result.body.content).toContain("# Hello");
+    expect(result.body.content).toContain("](https://example.com");
   });
 
   it("emits a summary diagnostic and flags empty output", async () => {
@@ -91,6 +92,8 @@ describe("MdreamTransformer.transform", () => {
       },
       { signal }
     );
+    expect(empty.outcome).toBe("transformed");
+    if (empty.outcome !== "transformed") throw new Error("Expected transformed outcome");
     expect(empty.diagnostics?.some(diagnostic => diagnostic.code === "empty_output")).toBe(true);
     expect(empty.diagnostics?.some(diagnostic => diagnostic.code === "mdream")).toBe(true);
   });

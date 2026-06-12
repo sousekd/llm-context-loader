@@ -5,6 +5,12 @@
  * shared preprocessor to treat blank placeholders as omitted values. These knobs
  * tune transformer behavior per instance; routing intent (the target media type)
  * comes from the requesting step, not this config.
+ *
+ * Note on `minimal`: withMinimalPreset returns 0 HTML-to-markdown chars when fed
+ * readability-extracted article HTML from table-heavy layouts (HN, Quora, etc.)
+ * because it tries to re-extract main content from already-extracted markup.
+ * Default false is safe when readability precedes mdream; use minimal=true only
+ * in pipelines without a prior extraction step.
  */
 
 import { z } from "zod";

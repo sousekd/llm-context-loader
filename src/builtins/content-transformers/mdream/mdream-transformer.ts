@@ -60,6 +60,7 @@ export class MdreamTransformer implements ContentTransformer {
     if (!markdown) diagnostics.push({ code: "empty_output" });
 
     return {
+      outcome: "transformed",
       body: { kind: "text", mediaType: mediaTypes.markdown, content: markdown, title: body.title },
       diagnostics
     };

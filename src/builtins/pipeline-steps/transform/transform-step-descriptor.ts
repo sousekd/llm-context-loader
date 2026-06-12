@@ -24,6 +24,7 @@ export const transformStepDescriptor = {
       {
         target: args.config.target,
         onUnsupported: args.config.onUnsupported,
+        onDeclined: args.config.onDeclined,
         emitDiagnostics: args.config.emitDiagnostics
       },
       { transformer, logger: args.deps.logger }

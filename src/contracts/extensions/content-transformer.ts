@@ -28,10 +28,20 @@ export interface ContentTransformDiagnostic {
 }
 
 /** Carries the transformed body and optional diagnostics. */
-export interface ContentTransformResult {
+export interface ContentTransformedResult {
+  readonly outcome: "transformed";
   readonly body: BodyContent;
   readonly diagnostics?: ReadonlyArray<ContentTransformDiagnostic>;
 }
+
+/** Indicates the transformer chose not to transform this input (e.g. not suitable). */
+export interface ContentDeclinedResult {
+  readonly outcome: "declined";
+  readonly reason?: string;
+}
+
+/** A content transformer may transform the body or decline. */
+export type ContentTransformResult = ContentTransformedResult | ContentDeclinedResult;
 
 /** Transforms one pipeline body representation into another. */
 export interface ContentTransformer {

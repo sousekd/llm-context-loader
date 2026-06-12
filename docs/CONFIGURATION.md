@@ -47,9 +47,6 @@ These are consumed by helper scripts and ignored by the Node app.
 
 The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
 
-The default (`truncate`) pipeline needs no provider configuration — it fetches and truncates. The `clean-deterministic` pipeline loads HTML from `firecrawl-html` and converts it to markdown with the `mdream` transformer (no LLM); its Firecrawl env vars are required only when it is active (set `DEFAULT_PIPELINE=clean-deterministic`). The `clean-llm` pipeline uses an LLM and Firecrawl; those env vars are
-required only when `clean-llm` is active (set `DEFAULT_PIPELINE=clean-llm`).
-
 Validation is lazy: the service validates and constructs only the providers and pipelines that
 are reachable from the active configuration. An unused provider with missing env vars will not
 fail startup.
@@ -58,11 +55,11 @@ The placeholders below are grouped by the part of the pipeline they configure.
 
 ### Source provider selection
 
-| Variable          | Default / behavior | Purpose                                                        |
-| ----------------- | ------------------ | -------------------------------------------------------------- |
-| `SOURCE_PROVIDER` | `http-default`     | Named source provider used by the `load-source` pipeline step. |
+| Variable          | Default / behavior         | Purpose                                              |
+| ----------------- | -------------------------- | ---------------------------------------------------- |
+| `SOURCE_PROVIDER` | selected pipeline fallback | Optional source-provider override for `load-source`. |
 
-The built-in `http` provider has no environment variables — it fetches the input URL directly. Each pipeline supplies its own `SOURCE_PROVIDER` fallback: `http-default` for `truncate`, `firecrawl-html` for `clean-deterministic`, and `firecrawl-markdown` for `clean-llm`.
+Leave `SOURCE_PROVIDER` empty to use the selected pipeline's fallback: `http-default` for `truncate`, `firecrawl-html` for `clean-deterministic` and `clean-combined`, and `firecrawl-markdown` for `clean-llm`. Set it only when intentionally overriding that choice.
 
 ### Source provider (Firecrawl)
 
@@ -73,19 +70,24 @@ The built-in `http` provider has no environment variables — it fetches the inp
 
 ### Source provider (Docling)
 
-| Variable           | Default / behavior | Purpose                                                                                        |
-| ------------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `docling-default` is active. |
-| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                      |
+| Variable           | Default / behavior | Purpose                                                                                    |
+| ------------------ | ------------------ | ------------------------------------------------------------------------------------------ |
+| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `docling-ocr` is active. |
+| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                  |
 
 ### Content transformer (mdream)
 
-| Variable         | Default / behavior | Purpose                                                          |
-| ---------------- | ------------------ | ---------------------------------------------------------------- |
-| `MDREAM_MINIMAL` | `true`             | Isolate main content and filter boilerplate in `mdream-default`. |
-| `MDREAM_CLEAN`   | `true`             | Post-conversion link and whitespace cleanup.                     |
+| Variable       | Default / behavior | Purpose                                                                                                              |
+| -------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `MDREAM_CLEAN` | `true`             | Post-conversion link and whitespace cleanup for `mdream-convert`. Ignored when `minimal=true` (`mdream-aggressive`). |
 
-These are read only when a pipeline using the `transform` step (such as `clean-deterministic`) is active.
+### Content transformer (readability)
+
+| Variable                        | Default / behavior | Purpose                                                                          |
+| ------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
+| `READABILITY_MIN_CONTENT_CHARS` | `140`              | Minimum content length for `isProbablyReaderable` gate in `readability-default`. |
+| `READABILITY_MIN_SCORE`         | `20`               | Minimum readerable score for `isProbablyReaderable` gate.                        |
+| `READABILITY_MAX_ELEMENTS`      | `0`                | Maximum DOM elements Readability parses; `0` = unlimited (DoS guardrail).        |
 
 ### LLM provider (OpenAI-compatible)
 
@@ -110,10 +112,11 @@ These are read only when a pipeline using the `transform` step (such as `clean-d
 
 ### Concurrency
 
-| Variable             | Default / behavior | Purpose                                                       |
-| -------------------- | ------------------ | ------------------------------------------------------------- |
-| `SOURCE_CONCURRENCY` | `1`                | Maximum concurrent source-loading groups.                     |
-| `LLM_CONCURRENCY`    | `1`                | Maximum concurrent LLM workflow groups (used by `clean-llm`). |
+| Variable              | Default / behavior | Purpose                                           |
+| --------------------- | ------------------ | ------------------------------------------------- |
+| `SOURCE_CONCURRENCY`  | `1`                | Maximum concurrent source-loading groups.         |
+| `PROCESS_CONCURRENCY` | `5`                | Maximum concurrent processing (transform) groups. |
+| `LLM_CONCURRENCY`     | `1`                | Maximum concurrent LLM workflow groups.           |
 
 ### Output rendering
 
@@ -129,7 +132,7 @@ These are read only when a pipeline using the `transform` step (such as `clean-d
 | `OWUI_AUTH_TOKEN` | empty              | Optional bearer token for the Open WebUI adapter route. |
 | `JINA_AUTH_TOKEN` | empty              | Optional bearer token for the Jina-style adapter route. |
 
-`.env.example` intentionally sets `LLM_CONTEXT_TOKENS` to a large example value so the context-fit gate is enabled in copied local configs. Leave it blank when you want to disable that gate.
+`.env.example` shows practical local overrides for concurrency, output size, clean-pass thresholds, and `LLM_CONTEXT_TOKENS`. Leave an env value blank or unset it when you want the YAML fallback or schema default instead.
 
 ## Environment Substitution Syntax
 

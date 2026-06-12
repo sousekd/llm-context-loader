@@ -33,3 +33,8 @@ export function isHtmlMediaType(mediaType: string): boolean {
   const essence = mediaType.split(";", 1)[0].trim().toLowerCase();
   return essence === mediaTypes.html || essence === mediaTypes.xhtml;
 }
+
+/** Returns whether trimmed text starts with an HTML tag or XML declaration. */
+export function looksLikeHtml(text: string): boolean {
+  return /^\s*</.test(text);
+}

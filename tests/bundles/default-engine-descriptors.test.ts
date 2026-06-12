@@ -42,7 +42,20 @@ describe("default engine descriptor bundle", () => {
     const mdream = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.contentTransformers.mdream;
     const config = mdream.parseConfig({});
     const transformer = await mdream.create({
-      name: "mdream-default",
+      name: "mdream-convert",
+      config,
+      deps: { tools: createTestHostTools(), logger: createTestLogger() }
+    });
+
+    expect(transformer.supports).toEqual(expect.any(Function));
+    expect(transformer.transform).toEqual(expect.any(Function));
+  });
+
+  it("round-trips the readability content transformer descriptor", async () => {
+    const readability = DEFAULT_ENGINE_DESCRIPTOR_BUNDLE.contentTransformers.readability;
+    const config = readability.parseConfig({ minContentLength: "200", minScore: "15", maxElements: "0" });
+    const transformer = await readability.create({
+      name: "readability-default",
       config,
       deps: { tools: createTestHostTools(), logger: createTestLogger() }
     });
@@ -132,7 +145,10 @@ function servicesWithProviders(sourceProvider: SourceProvider, llmProvider: LlmP
 function contentTransformer(): ContentTransformer {
   return {
     supports: () => true,
-    transform: async () => ({ body: { kind: "text", mediaType: "text/markdown", content: "md" } })
+    transform: async () => ({
+      outcome: "transformed",
+      body: { kind: "text", mediaType: "text/markdown", content: "md" }
+    })
   };
 }
 

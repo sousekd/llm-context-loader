@@ -15,6 +15,7 @@ const transformStepConfigSchema = z
     transformer: z.string().min(1, "transform step requires a transformer name"),
     target: z.string().min(1, "transform step requires a target media type"),
     onUnsupported: z.enum(["skip", "fail"]).default("skip"),
+    onDeclined: z.enum(["skip", "fail"]).default("skip"),
     emitDiagnostics: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(false))
   })
   .strict();
@@ -26,6 +27,7 @@ export type TransformStepConfig = z.infer<typeof transformStepConfigSchema>;
 export interface TransformStepOptions {
   readonly target: string;
   readonly onUnsupported: "skip" | "fail";
+  readonly onDeclined: "skip" | "fail";
   readonly emitDiagnostics: boolean;
 }
 

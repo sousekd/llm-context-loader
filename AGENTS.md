@@ -37,3 +37,13 @@ Read the row that matches your task. Each focused doc is self-contained for its 
 - When changing behavior, keep the docs that describe it accurate in the same change.
 - No gratuitous comments. Inline comments that narrate a change are prohibited ([coding-conventions](docs/agents/coding-conventions.md)). Before adding a comment, ask: will it still be useful after the transient context is gone?
 - Don't over-document trivial changes. A new knob, helper, or internal refactor does not warrant updates to `ARCHITECTURE.md` or `extension-authoring.md`. Update only docs that directly describe the changed surface.
+
+## Terminal Behavior on Windows
+
+When using the terminal on Windows:
+
+- Prefer single-line PowerShell commands.
+- Avoid interactive commands, pagers, prompts, and commands that wait for input.
+- Prefer `pwsh` or PowerShell with `-NoLogo -NoProfile`.
+- For git commands, use non-interactive flags such as `--no-pager` and `--no-edit` when appropriate.
+- If a command appears stuck after output is printed, do not blindly rerun it. First check whether the command already completed and inspect the visible terminal output.

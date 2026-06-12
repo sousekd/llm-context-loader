@@ -46,6 +46,9 @@ export class TransformStep implements PipelineStep {
       throw error;
     }
 
+    if (result.outcome === "declined")
+      return { status: this.config.onDeclined === "fail" ? "failed" : "skipped", reason: result.reason ?? "declined" };
+
     if (!outputMatchesTarget(result.body, this.config.target)) return { status: "failed", reason: "wrong_output_type" };
 
     return {

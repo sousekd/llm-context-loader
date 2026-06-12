@@ -68,7 +68,7 @@ The current built-ins are:
 
 - HTTP adapters: `open-webui`, `jina`.
 - Source providers: `http`, `firecrawl`, `docling`.
-- Content transformers: `mdream`.
+- Content transformers: `readability`, `mdream`.
 - LLM providers: `openai-chat`.
 - Pipeline steps: `load-source`, `llm-pass`, `transform`, `truncate`, `capture-urls`, `verify-urls`.
 - Output renderers: `debug-xml`, `passthrough`.
