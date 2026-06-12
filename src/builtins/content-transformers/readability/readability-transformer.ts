@@ -15,11 +15,7 @@ import { parseHTML } from "linkedom";
 import { InternalError } from "../../../shared/errors.js";
 import { isHtmlMediaType, mediaTypes } from "../../../shared/media-types.js";
 
-import type {
-  ContentTransformDiagnostic,
-  ContentTransformResult,
-  ContentTransformer
-} from "../../../contracts/extensions/content-transformer.js";
+import type { ContentTransformResult, ContentTransformer } from "../../../contracts/extensions/content-transformer.js";
 import type { BodyContent } from "../../../contracts/pipeline/context.js";
 import type { Logger } from "../../../shared/logger.js";
 import type { ReadabilityTransformerConfig } from "./readability-transformer-config.js";
@@ -70,16 +66,7 @@ export class ReadabilityTransformer implements ContentTransformer {
       return { outcome: "declined", reason: "not_readerable" };
 
     const article = new Readability(doc, { maxElemsToParse: this.config.maxElements || undefined }).parse();
-    if (!article || !article.content) return { outcome: "declined", reason: "parse_empty" };
-
-    const originalLength = body.content.length;
-    const articleLength = article.content.length;
-    const diagnostics: ContentTransformDiagnostic[] = [
-      {
-        code: "readability",
-        message: `${originalLength} html chars -> ${articleLength} article chars`
-      }
-    ];
+    if (!article || !article.content) return { outcome: "declined", reason: "output_empty" };
 
     return {
       outcome: "transformed",
@@ -88,8 +75,7 @@ export class ReadabilityTransformer implements ContentTransformer {
         mediaType: mediaTypes.html,
         content: article.content,
         title: body.title || (article.title ?? undefined)
-      },
-      diagnostics
+      }
     };
   }
 }

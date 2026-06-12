@@ -203,7 +203,7 @@ config:
 
 Supports text `text/html` or `application/xhtml+xml` bodies targeting `text/html`. The incoming title is preserved; when absent, the extracted article title is used instead.
 
-Decline reasons are `not_readerable` and `parse_empty`. Runtime errors propagate to the orchestrator; the failed step has no effect, so downstream steps continue from the prior body and the run rolls up as `degraded`.
+Decline reasons are `not_readerable`, `parse_empty`, and `output_empty`. Runtime errors propagate to the orchestrator; the failed step has no effect, so downstream steps continue from the prior body and the run rolls up as `degraded`.
 
 ### `mdream`
 
@@ -349,7 +349,7 @@ Applies a named content transformer to the current body. The step resolves `tran
 | `transformer`     | string           | —       | Name of a configured `contentTransformers` instance. Required.                                                 |
 | `target`          | string           | —       | Media type the transformer must produce, for example `text/markdown`. Required.                                |
 | `onUnsupported`   | `skip` \| `fail` | `skip`  | What to do when the transformer does not support the current body (wrong source media type or representation). |
-| `onDeclined`      | `skip` \| `fail` | `skip`  | What to do when the transformer returns `declined` (e.g. `not_readerable`, `parse_empty`).                     |
+| `onDeclined`      | `skip` \| `fail` | `skip`  | What to do when the transformer returns `declined`.                                                            |
 | `emitDiagnostics` | bool             | `false` | When enabled, transformer-reported diagnostics are surfaced as child nodes in the step report.                 |
 
 The step skips with `no_body` when there is no body. When the transformer does not support the current body it skips with `unsupported` (or fails with `onUnsupported: fail`). When the transformer returns `declined`, the step skips with that reason (or fails with `onDeclined: fail`). A transform aborted by the step timeout fails with `timeout`. If the transformer returns a body that does not match `target`, the step fails with `wrong_output_type`.

@@ -125,14 +125,12 @@ pipelines:
         config:
           transformer: readability-default
           target: text/html
-          emitDiagnostics: true
       - type: transform
         name: convert
         concurrencyGroup: process
         config:
           transformer: mdream-convert
           target: text/markdown
-          emitDiagnostics: true
       - type: truncate
         name: truncate
         config:
@@ -217,14 +215,12 @@ pipelines:
         config:
           transformer: readability-default
           target: text/html
-          emitDiagnostics: true
       - type: transform
         name: convert
         concurrencyGroup: process
         config:
           transformer: mdream-convert
           target: text/markdown
-          emitDiagnostics: true
       - type: capture-urls
         name: capture_source_urls
         concurrencyGroup: process

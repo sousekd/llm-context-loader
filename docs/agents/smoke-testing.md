@@ -104,7 +104,7 @@ For the OWUI surface the per-URL time column is the **batch** time shared by eve
 
 When the script output is not enough, read the server logs: pipeline start/finish lines carry the URL, outcome, and duration, and step warnings carry a `reason`. To dig into a single URL, use `inspect-suspects.ps1`.
 
-A `result="failed"` with `final_length=0` does not imply a pipeline bug by itself. Check the step entries in the footer: was the fetch step `ok`? Did all steps that should run actually run? A footer step showing `empty_output` is normal for 404 pages, paywalled content, or JavaScript-rendered SPAs — the pipeline cannot salvage those. Look at each step's `status` and `reason` before deciding something is wrong.
+A `result="failed"` with `final_length=0` does not imply a pipeline bug by itself. Check the step entries in the footer: was the fetch step `ok`? Did all steps that should run actually run? An empty final body is normal for 404 pages, paywalled content, or JavaScript-rendered SPAs — the deterministic transformers convert them to empty markdown and the pipeline cannot salvage those. Look at each step's `status` and `reason` before deciding something is wrong.
 
 ## Common Traps
 

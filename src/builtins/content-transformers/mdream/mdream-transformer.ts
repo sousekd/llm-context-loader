@@ -5,6 +5,8 @@
  * passes the source URL as the mdream `origin` so relative links and images
  * resolve to absolute URLs. The `minimal` preset additionally isolates main
  * content and filters boilerplate; `clean` applies link and whitespace cleanup.
+ * Empty conversion output is returned as a valid empty body, not a decline, so
+ * a content-free page (e.g. a script-only SPA shell) fails the run honestly.
  */
 
 import { htmlToMarkdown, withMinimalPreset, type MdreamOptions } from "@mdream/js";
@@ -13,7 +15,6 @@ import { InternalError } from "../../../shared/errors.js";
 import { isHtmlMediaType, mediaTypes } from "../../../shared/media-types.js";
 
 import type {
-  ContentTransformDiagnostic,
   ContentTransformRequest,
   ContentTransformResult,
   ContentTransformer
@@ -54,15 +55,10 @@ export class MdreamTransformer implements ContentTransformer {
       throw new InternalError("mdream transformer requires a text body", "mdream_non_text_body");
 
     const markdown = htmlToMarkdown(body.content, this.buildOptions(input.url)).trim();
-    const diagnostics: ContentTransformDiagnostic[] = [
-      { code: "mdream", message: `${body.content.length} html chars -> ${markdown.length} markdown chars` }
-    ];
-    if (!markdown) diagnostics.push({ code: "empty_output" });
 
     return {
       outcome: "transformed",
-      body: { kind: "text", mediaType: mediaTypes.markdown, content: markdown, title: body.title },
-      diagnostics
+      body: { kind: "text", mediaType: mediaTypes.markdown, content: markdown, title: body.title }
     };
   }
 

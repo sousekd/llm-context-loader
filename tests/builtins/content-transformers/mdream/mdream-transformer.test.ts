@@ -82,7 +82,7 @@ describe("MdreamTransformer.transform", () => {
     expect(result.body.content).toContain("](https://example.com");
   });
 
-  it("emits a summary diagnostic and flags empty output", async () => {
+  it("returns a transformed empty body when conversion yields no markdown", async () => {
     const transformer = makeTransformer();
     const empty = await transformer.transform(
       {
@@ -94,8 +94,9 @@ describe("MdreamTransformer.transform", () => {
     );
     expect(empty.outcome).toBe("transformed");
     if (empty.outcome !== "transformed") throw new Error("Expected transformed outcome");
-    expect(empty.diagnostics?.some(diagnostic => diagnostic.code === "empty_output")).toBe(true);
-    expect(empty.diagnostics?.some(diagnostic => diagnostic.code === "mdream")).toBe(true);
+    expect(empty.body.kind).toBe("text");
+    if (empty.body.kind !== "text") throw new Error("Expected text body");
+    expect(empty.body.content).toBe("");
   });
 
   it("throws when given a non-text body", async () => {

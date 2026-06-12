@@ -74,7 +74,7 @@ The result type is a discriminated union:
 
 `supports` gates `transform`: the step only invokes a matching transformer, so `transform` may throw `InternalError` for inputs that bypass the gate. Use `declined` for deliberate "not suitable" decisions (e.g. `isProbablyReaderable` returned false).
 
-Built-in examples: `src/builtins/content-transformers/readability/` (article HTML extraction, outputs `declined`), `src/builtins/content-transformers/mdream/` (HTML to markdown, always `transformed`).
+Built-in examples: `src/builtins/content-transformers/readability/` (article HTML extraction, can return `declined`), `src/builtins/content-transformers/mdream/` (HTML to markdown, always `transformed`).
 
 ### LLM Providers
 

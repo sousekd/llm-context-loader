@@ -95,7 +95,7 @@ describe("ReadabilityTransformer.transform", () => {
     expect(result.body.title).toBe("Page Title");
   });
 
-  it("adds a readability diagnostic with char counts", async () => {
+  it("transforms article HTML without diagnostics", async () => {
     const transformer = makeTransformer();
     const body: BodyContent = {
       kind: "text",
@@ -107,7 +107,7 @@ describe("ReadabilityTransformer.transform", () => {
 
     expect(result.outcome).toBe("transformed");
     if (result.outcome !== "transformed") return;
-    expect(result.diagnostics?.some(d => d.code === "readability")).toBe(true);
+    expect(result.diagnostics).toBeUndefined();
   });
 
   it("declines not_readerable for short boilerplate HTML", async () => {
