@@ -11,7 +11,7 @@ LLM Context Loader is a small HTTP service that turns URLs into markdown for LLM
 
 ## Current Shape
 
-- **Pipelines:** `truncate` (default, no LLM), `clean-deterministic` (Firecrawl HTML + Readability + mdream, no LLM), `clean-llm` (Firecrawl + LLM), and `clean-combined` (Firecrawl HTML + Readability + mdream + LLM summarize), selected via `DEFAULT_PIPELINE`.
+- **Pipelines:** `full` (default; full-featured with toggleable Docling, Firecrawl, Readability, and LLM passes) and `smoke` (zero-dependency HTTP fetch + aggressive markdown + truncation), selected via `DEFAULT_PIPELINE`.
 - **Source providers:** native HTTP fetch, Firecrawl, Docling.
 - **Content transformers:** `readability` (article HTML extraction), `mdream` (HTML to markdown).
 - **LLM providers:** OpenAI-compatible `/chat/completions`.
@@ -64,7 +64,7 @@ docker compose -f compose.deploy.yaml up -d
 
 The deploy compose file requires `LLMC_IMAGE_TAG`. The example env file uses `latest`, but repeatable deployments should pin it to an immutable release tag.
 
-The out-of-box `truncate` pipeline needs no provider config. Switch to `clean-llm` with `DEFAULT_PIPELINE=clean-llm` and the appropriate provider vars. The Compose files pass all variables through without failing early; the service validates only the active pipeline's providers at startup. If Firecrawl or the LLM server runs on the host, use a LAN address or `host.docker.internal` instead of `localhost`.
+The `smoke` pipeline needs no provider config — it uses native HTTP fetch only. The Compose files pass all variables through without failing early; the service validates only the active pipeline's providers at startup. If Firecrawl or the LLM server runs on the host, use a LAN address or `host.docker.internal` instead of `localhost`.
 
 ## API
 

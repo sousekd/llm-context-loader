@@ -1,9 +1,10 @@
 /**
  * Compiles configured pipeline declarations into executable pipeline plans.
  *
- * Pipeline compilation validates renderer references, concurrency-group
- * references, diagnostic-safe step names, duplicate step names, descriptor
- * lookup, config parsing, and step factory failures before any request can run.
+ * Pipeline compilation validates renderer references and enabled-step
+ * concurrency groups, diagnostic names, descriptor lookup, config parsing, and
+ * factory failures before any request can run. Disabled steps are excluded
+ * before those step-level checks so their providers are never required.
  */
 
 import { outputRendererRegistryKey } from "../../../contracts/extensions/output-renderer.js";
@@ -29,7 +30,10 @@ export async function buildPipelines(
   const rendererRegistry = services.require(outputRendererRegistryKey);
   const pipelines = new Map<string, CompiledPipeline>();
   for (const [pipelineName, pipeline] of Object.entries(rawPipelines)) {
-    if (!pipeline.enabled) continue;
+    if (!pipeline.enabled) {
+      logger.info({ pipeline: pipelineName }, "pipeline disabled; excluded from compilation");
+      continue;
+    }
     const renderer = rendererRegistry.tryGet(pipeline.outputRenderer);
     if (!renderer)
       throw new ConfigurationError(
@@ -40,8 +44,13 @@ export async function buildPipelines(
       Object.entries(pipeline.limiters).map(([name, concurrency]) => [name, createConcurrencyLimiter(concurrency)])
     );
     const seenStepNames = new Set<string>();
+    const disabledStepNames: string[] = [];
     const steps: CompiledPipelineStep[] = [];
     for (const common of pipeline.steps) {
+      if (common.enabled === false) {
+        disabledStepNames.push(common.name);
+        continue;
+      }
       try {
         assertDiagnosticName(common.name);
       } catch (cause) {
@@ -113,6 +122,9 @@ export async function buildPipelines(
         step
       });
     }
+    if (disabledStepNames.length > 0)
+      logger.info({ pipeline: pipelineName, disabled: disabledStepNames }, "steps disabled; excluded from compilation");
+    if (steps.length === 0) logger.warn({ pipeline: pipelineName }, "pipeline compiled with no enabled steps");
     pipelines.set(pipelineName, { name: pipelineName, renderer: renderer.renderer, steps, groups });
   }
   return pipelines;

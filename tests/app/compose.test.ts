@@ -124,7 +124,7 @@ describe("composeApp", () => {
         .replace("includeSkipped: true", "includeSkipped: ${DEBUG_XML_INCLUDE_SKIPPED:-}")
         .replace(
           "        config:\n          provider: llm-default",
-          "        timeoutSeconds: ${CLEAN_TIMEOUT_SECONDS:-}\n        config:\n          provider: llm-default"
+          "        timeoutSeconds: ${LLM_CLEAN_TIMEOUT_SECONDS:-}\n        config:\n          provider: llm-default"
         )
         .replace("minInputChars: 1", "minInputChars: ${MIN_INPUT_CHARS:-}")
         .replace("maxInputChars: 100", "maxInputChars: ${MAX_INPUT_CHARS:-}")
@@ -139,7 +139,7 @@ describe("composeApp", () => {
         LLM_BASE_URL: "https://llm.example/v1",
         LLM_MODEL: "model",
         DEBUG_XML_INCLUDE_SKIPPED: "false",
-        CLEAN_TIMEOUT_SECONDS: "",
+        LLM_CLEAN_TIMEOUT_SECONDS: "",
         MIN_INPUT_CHARS: "",
         MAX_INPUT_CHARS: ""
       },

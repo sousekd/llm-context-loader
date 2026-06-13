@@ -22,6 +22,7 @@ export interface EngineStepConfig {
   readonly timeoutSeconds: number;
   readonly runIf?: Condition;
   readonly skipIf?: Condition;
+  readonly enabled?: boolean;
   readonly config?: unknown;
 }
 

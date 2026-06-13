@@ -35,7 +35,7 @@ HTTP adapters also name the pipeline they expose:
 ```yaml
 some-adapter:
   type: open-webui
-  pipeline: ${DEFAULT_PIPELINE:-truncate}
+  pipeline: ${DEFAULT_PIPELINE:-full}
   config: {}
 ```
 
@@ -44,7 +44,7 @@ omitted, a pipeline is active only when at least one HTTP adapter references it.
 `enabled: false` parks it. Setting `enabled: true` pins it active regardless of adapter
 references. The shipped pipelines leave `enabled` omitted, so `DEFAULT_PIPELINE` alone drives
 the active set. Active-set pipelines are compiled and validated at startup; inactive ones are
-skipped (their providers are never built).
+excluded from compilation.
 
 Pipeline steps include common orchestration fields plus a type-specific `config` block:
 
@@ -53,12 +53,22 @@ Pipeline steps include common orchestration fields plus a type-specific `config`
   name: clean
   concurrencyGroup: llm
   timeoutSeconds: 90
+  enabled: false
   runIf: binary_doc
   skipIf: code_host
   config: {}
 ```
 
-`runIf` and `skipIf` are optional per-step gates (`string` or structured predicate — see [Conditional step execution](#conditional-step-execution) below). When both are present, `runIf` is checked first.
+`enabled` is an optional compile-time exclusion toggle (default `true`). When `enabled: false`,
+the step is completely excluded from compilation — it is never name-validated, never
+config-parsed, and never constructed. Its linked provider (if any) is never required, so
+missing provider configuration does not cause a startup failure. This differs from `runIf`
+and `skipIf`, which are runtime gates: a gated step is still compiled and appears in the
+footer as skipped.
+
+`runIf` and `skipIf` are optional per-step gates (`string` or structured predicate — see
+[Conditional step execution](#conditional-step-execution) below). When both are present,
+`runIf` is checked first.
 
 Step names must be unique within a pipeline and must be valid diagnostic names: lowercase letters, numbers, and underscores, starting with a lowercase letter.
 
@@ -312,7 +322,7 @@ pipelines:
 
 `outputRenderer` references a named output renderer instance. `limiters` declares concurrency group names and their maximum concurrency. A step can opt into a group with `concurrencyGroup`.
 
-Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the `clean-llm` pipeline, `llm-pass(clean)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
+Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the `full` pipeline, `llm-pass(clean_llm)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
 
 `timeoutSeconds` applies to both limiter waiting and step execution. For one adjacent concurrency block, limiter waiting uses the longest `timeoutSeconds` value in that block.
 
@@ -345,7 +355,7 @@ Multiple rules may share the same `signal` name for natural OR semantics. The `m
 
 ```yaml
 config:
-  provider: ${SOURCE_PROVIDER:-http-default}
+  provider: http-default
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.
@@ -458,36 +468,37 @@ Shipped defaults: `verify_after_clean` uses `rollback` with `maxReportedUrls: 0`
 
 ## Shipped Pipelines
 
-The config ships four pipelines, selected via `DEFAULT_PIPELINE` (defaults to `truncate`).
+The config ships two pipelines, selected via `DEFAULT_PIPELINE` (defaults to `full`).
 
-### `truncate` (default)
-
-```text
-load-source(http-default) -> truncate
-```
-
-Fetches the URL directly and truncates to budget. No external services required.
-
-### `clean-deterministic`
+### `full` (default)
 
 ```text
-load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> truncate
+classify-url -> load-source(docling-ocr)* -> load-source(firecrawl-html)* -> load-source(http-default) -> transform(clean via readability)* -> transform(convert via mdream) -> capture-urls -> llm-pass(clean_llm)* -> verify-urls(rollback)* -> llm-pass(summarize)* -> verify-urls(report)* -> truncate
+  * toggleable via env var (see below)
 ```
 
-Loads Firecrawl raw HTML, extracts article HTML with `readability` when suitable, converts HTML to markdown with `mdream`, then truncates. No LLM passes. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-deterministic`.
+The full-featured pipeline. Uses `classify-url` for binary-doc and code-host detection, tries
+Docling OCR for binary documents, tries Firecrawl, then falls back to native HTTP fetch,
+extracts article content with Readability, converts to markdown, captures URLs, and runs
+optional LLM passes (clean and/or summarize) with URL-hallucination verification.
 
-### `clean-llm`
+Selected steps can be toggled via environment variables:
+
+| Step(s)               | Env toggle              | Default | External dependency required when enabled              |
+| --------------------- | ----------------------- | ------- | ------------------------------------------------------ |
+| `fetch_docling`       | `DOCLING_ENABLED`       | false   | `DOCLING_BASE_URL` (+ optional `DOCLING_API_KEY`)      |
+| `fetch_firecrawl`     | `FIRECRAWL_ENABLED`     | false   | `FIRECRAWL_BASE_URL` (+ optional `FIRECRAWL_API_KEY`)  |
+| `clean` (readability) | `READABILITY_ENABLED`   | true    | _(local; no external service needed)_                  |
+| `clean_llm` + verify  | `LLM_CLEAN_ENABLED`     | false   | `LLM_BASE_URL`, `LLM_MODEL` (+ optional `LLM_API_KEY`) |
+| `summarize` + verify  | `LLM_SUMMARIZE_ENABLED` | false   | `LLM_BASE_URL`, `LLM_MODEL` (+ optional `LLM_API_KEY`) |
+
+Select with `DEFAULT_PIPELINE=full`.
+
+### `smoke`
 
 ```text
-load-source(firecrawl-markdown) -> capture-urls -> llm-pass(clean) -> verify-urls(rollback) -> llm-pass(summarize) -> verify-urls(report) -> truncate
+load-source(http-default) -> transform(convert via mdream-aggressive) -> truncate
 ```
 
-The original reference pipeline. Loads markdown from a Firecrawl instance, runs clean and summarize LLM passes with URL-hallucination gates, then truncates. Pipeline fallback: `firecrawl-markdown`. Select with `DEFAULT_PIPELINE=clean-llm`.
-
-### `clean-combined`
-
-```text
-load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> capture-urls -> llm-pass(summarize) -> verify-urls(report) -> truncate
-```
-
-Combines the deterministic HTML-to-markdown path with an LLM summarize pass. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-combined`.
+Minimal test pipeline with zero external dependencies. Native HTTP fetch, aggressive markdown
+conversion, and truncation. Select with `DEFAULT_PIPELINE=smoke`.

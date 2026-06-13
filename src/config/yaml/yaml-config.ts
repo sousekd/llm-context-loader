@@ -44,6 +44,7 @@ const stepSchema = z
     timeoutSeconds: z.preprocess(emptyStringAsUndefined, z.coerce.number().int().positive().default(60)),
     runIf: conditionSchema.optional(),
     skipIf: conditionSchema.optional(),
+    enabled: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().optional()),
     config: z.unknown().default({})
   })
   .strict();
