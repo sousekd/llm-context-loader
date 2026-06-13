@@ -53,10 +53,47 @@ Pipeline steps include common orchestration fields plus a type-specific `config`
   name: clean
   concurrencyGroup: llm
   timeoutSeconds: 90
+  runIf: binary_doc
+  skipIf: code_host
   config: {}
 ```
 
+`runIf` and `skipIf` are optional per-step gates (`string` or structured predicate — see [Conditional step execution](#conditional-step-execution) below). When both are present, `runIf` is checked first.
+
 Step names must be unique within a pipeline and must be valid diagnostic names: lowercase letters, numbers, and underscores, starting with a lowercase letter.
+
+## Conditional Step Execution
+
+Pipeline steps support signal-based gating via `runIf` and `skipIf`. When the gate evaluates to false (or true, for `skipIf`), the step is recorded as `skipped` with a reserved reason (`run_if_unmet` or `skip_if_met`) without running. A gate is a predicate evaluated against runtime signals emitted by earlier steps (such as `classify-url`). The simplest form is a bare signal name:
+
+```yaml
+runIf: binary_doc # runs only when signal exists and is truthy
+skipIf: code_host # skips when signal exists and is truthy
+```
+
+Structured combinators let you build compound conditions:
+
+```yaml
+runIf:
+  all:
+    - binary_doc
+    - code_host
+
+skipIf:
+  any:
+    - is_pdf
+    - is_office_doc
+
+runIf:
+  not: binary_doc
+
+skipIf:
+  any:
+    - all: [binary_doc, code_host]
+    - not: processed
+```
+
+`all: []` is always true. `any: []` is always false. Truthy values: present and not `false`, `0`, or `""`.
 
 ## HTTP Adapters
 
@@ -280,6 +317,29 @@ Adjacent steps that share the same `concurrencyGroup` share one limiter acquisit
 `timeoutSeconds` applies to both limiter waiting and step execution. For one adjacent concurrency block, limiter waiting uses the longest `timeoutSeconds` value in that block.
 
 ## Steps
+
+### `classify-url`
+
+```yaml
+config:
+  rules:
+    - signal: binary_doc
+      extensionIn: [pdf, docx, doc, pptx, ppt, xlsx, xls]
+    - signal: code_host
+      anyHost: [github.com, gitlab.com, bitbucket.org]
+    - signal: is_html_article
+      pattern: "/articles/\\d+"
+```
+
+Inspects the input URL against a list of rules and emits boolean signals (`true`) for each match. Placed as the first step in a pipeline, `classify-url` lets downstream steps react through `runIf`/`skipIf`. Each rule must have exactly one matcher:
+
+| Matcher       | Matches when                                                                  |
+| ------------- | ----------------------------------------------------------------------------- |
+| `pattern`     | URL matches the regex pattern                                                 |
+| `anyHost`     | URL hostname equals one of the listed hosts (or is a subdomain, www‑stripped) |
+| `extensionIn` | URL pathname ends with one of the listed extensions (case‑insensitive)        |
+
+Multiple rules may share the same `signal` name for natural OR semantics. The `matched` diagnostic attribute lists all matched signal names (space‑separated) or `"none"`.
 
 ### `load-source`
 

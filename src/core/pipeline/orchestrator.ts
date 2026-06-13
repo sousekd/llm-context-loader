@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { InternalError, isAbortError } from "../../shared/errors.js";
 import { getRequestContext, runWithRequestContext, withChildRequestContext } from "../../shared/request-context.js";
 import { BodyStore } from "./body.js";
+import { resolveStepGate } from "./conditions.js";
 import { ReadonlyArtifactBag, ReadonlySignalBag } from "./context.js";
 import { applyStepEffects } from "./effects.js";
 import { finalizeReport } from "./report.js";
@@ -167,9 +168,23 @@ export class PipelineOrchestrator {
     const { entry, index } = step;
     const current = state.body.current();
     const inputLength = current ? bodyLength(current) : undefined;
+    const stepStartedAt = this.clock.now();
+
+    const gateReason = resolveStepGate(entry, name => state.signals.get(name));
+    if (gateReason) {
+      this.recordStepResult(
+        step,
+        pipeline,
+        { status: "skipped", reason: gateReason },
+        state,
+        stepStartedAt,
+        inputLength
+      );
+      return;
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), entry.timeoutSeconds * 1000);
-    const stepStartedAt = this.clock.now();
     let result: StepResult;
 
     this.logger.debug(

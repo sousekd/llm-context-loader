@@ -29,6 +29,44 @@ describe("yamlToAppConfig", () => {
     expect(appConfig.adapters.http).toEqual(raw.httpAdapters);
     expect(appConfig.metadata?.schemaVersion).toBe(1);
   });
+
+  it("preserves conditional step gates", () => {
+    const raw = rawYamlConfigSchema.parse({
+      schemaVersion: 1,
+      pipelines: {
+        default: {
+          steps: [
+            {
+              type: "transform",
+              name: "clean",
+              runIf: { all: ["binary_doc", { not: "code_host" }] },
+              skipIf: "skip_clean"
+            }
+          ]
+        }
+      }
+    });
+
+    const appConfig = yamlToAppConfig(raw);
+
+    expect(appConfig.engineConfig.pipelines.default?.steps[0]).toMatchObject({
+      runIf: { all: ["binary_doc", { not: "code_host" }] },
+      skipIf: "skip_clean"
+    });
+  });
+
+  it("rejects invalid conditional gate signal names", () => {
+    expect(() =>
+      rawYamlConfigSchema.parse({
+        schemaVersion: 1,
+        pipelines: {
+          default: {
+            steps: [{ type: "transform", name: "clean", runIf: "BinaryDoc" }]
+          }
+        }
+      })
+    ).toThrow("Invalid signal name");
+  });
 });
 
 describe("loadYamlAppConfig", () => {

@@ -6,6 +6,8 @@
  * boundary before calling `createEngine`.
  */
 
+import type { Condition } from "../contracts/pipeline/condition.js";
+
 /** Configures one named provider or output renderer instance. */
 export interface EngineComponentConfig {
   readonly type: string;
@@ -18,6 +20,8 @@ export interface EngineStepConfig {
   readonly name: string;
   readonly concurrencyGroup?: string;
   readonly timeoutSeconds: number;
+  readonly runIf?: Condition;
+  readonly skipIf?: Condition;
   readonly config?: unknown;
 }
 

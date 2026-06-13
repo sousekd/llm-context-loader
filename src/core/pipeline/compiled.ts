@@ -7,6 +7,7 @@
  */
 
 import type { OutputRenderer } from "../../contracts/extensions/output-renderer.js";
+import type { Condition } from "../../contracts/pipeline/condition.js";
 import type { PipelineStep } from "../../contracts/pipeline/step.js";
 import type { ConcurrencyLimiter } from "../../shared/limiters.js";
 
@@ -16,6 +17,8 @@ export interface CompiledPipelineStep {
   readonly type: string;
   readonly timeoutSeconds: number;
   readonly concurrencyGroup?: string;
+  readonly runIf?: Condition;
+  readonly skipIf?: Condition;
   readonly step: PipelineStep;
 }
 

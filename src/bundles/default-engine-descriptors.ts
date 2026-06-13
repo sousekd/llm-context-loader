@@ -12,14 +12,15 @@ import { openAiChatProviderDescriptor } from "../builtins/llm-providers/openai-c
 import { debugXmlRendererDescriptor } from "../builtins/output-renderers/debug-xml/debug-xml-renderer-descriptor.js";
 import { passthroughRendererDescriptor } from "../builtins/output-renderers/passthrough/passthrough-renderer-descriptor.js";
 import { captureUrlsStepDescriptor } from "../builtins/pipeline-steps/capture-urls/capture-urls-step-descriptor.js";
+import { classifyUrlStepDescriptor } from "../builtins/pipeline-steps/classify-url/classify-url-step-descriptor.js";
 import { llmPassStepDescriptor } from "../builtins/pipeline-steps/llm-pass/llm-pass-step-descriptor.js";
 import { loadSourceStepDescriptor } from "../builtins/pipeline-steps/load-source/load-source-step-descriptor.js";
 import { transformStepDescriptor } from "../builtins/pipeline-steps/transform/transform-step-descriptor.js";
 import { truncateStepDescriptor } from "../builtins/pipeline-steps/truncate/truncate-step-descriptor.js";
 import { verifyUrlsStepDescriptor } from "../builtins/pipeline-steps/verify-urls/verify-urls-step-descriptor.js";
-import { httpProviderDescriptor } from "../builtins/source-providers/http/http-provider-descriptor.js";
-import { firecrawlProviderDescriptor } from "../builtins/source-providers/firecrawl/firecrawl-provider-descriptor.js";
 import { doclingProviderDescriptor } from "../builtins/source-providers/docling/docling-provider-descriptor.js";
+import { firecrawlProviderDescriptor } from "../builtins/source-providers/firecrawl/firecrawl-provider-descriptor.js";
+import { httpProviderDescriptor } from "../builtins/source-providers/http/http-provider-descriptor.js";
 import { createDescriptorRecord } from "../shared/descriptors.js";
 
 import type { ContentTransformerDescriptor } from "../contracts/extensions/content-transformer.js";
@@ -55,6 +56,7 @@ export const DEFAULT_ENGINE_DESCRIPTOR_BUNDLE: EngineDescriptorBundle = Object.f
   pipelineSteps: createDescriptorRecord(
     [
       captureUrlsStepDescriptor,
+      classifyUrlStepDescriptor,
       loadSourceStepDescriptor,
       llmPassStepDescriptor,
       transformStepDescriptor,

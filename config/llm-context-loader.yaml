@@ -203,15 +203,33 @@ pipelines:
       process: ${PROCESS_CONCURRENCY:-5}
       llm: ${LLM_CONCURRENCY:-1}
     steps:
+      - type: classify-url
+        name: classify
+        config:
+          rules:
+            - signal: binary_doc
+              extensionIn: [pdf, docx, doc, pptx, ppt, xlsx, xls]
+            - signal: binary_doc
+              pattern: "/pdf/\\d+(\\.\\d+)?($|\\?|#)"
+            - signal: code_host
+              anyHost: [github.com, gitlab.com, bitbucket.org]
       - type: load-source
-        name: fetch
+        name: fetch_docling
+        concurrencyGroup: source
+        runIf: binary_doc
+        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+        config:
+          provider: docling-ocr
+      - type: load-source
+        name: fetch_firecrawl
         concurrencyGroup: source
         timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
         config:
-          provider: ${SOURCE_PROVIDER:-firecrawl-html}
+          provider: firecrawl-html
       - type: transform
         name: clean
         concurrencyGroup: process
+        skipIf: code_host
         config:
           transformer: readability-default
           target: text/html

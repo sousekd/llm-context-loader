@@ -108,6 +108,8 @@ export async function buildPipelines(
         type: common.type,
         timeoutSeconds: common.timeoutSeconds,
         concurrencyGroup: common.concurrencyGroup,
+        runIf: common.runIf,
+        skipIf: common.skipIf,
         step
       });
     }
