@@ -116,10 +116,8 @@ export class DoclingProvider implements SourceProvider {
     return {
       sources: [{ kind: "http", url }],
       options: {
-        to_formats: this.config.output === "html" ? ["html", "json"] : ["md", "json"],
-        image_export_mode: "placeholder",
-        do_ocr: this.config.doOcr,
-        table_mode: this.config.tableMode
+        ...this.config.options,
+        to_formats: this.config.output === "html" ? ["html", "json"] : ["md", "json"]
       }
     };
   }

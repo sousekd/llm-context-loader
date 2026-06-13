@@ -13,8 +13,7 @@ Implemented today:
 
 - `POST /` for Open WebUI's external web-loader contract.
 - `GET /r/<url>` and `GET /r?url=<url>` for limited Jina Reader-style URL-to-markdown compatibility.
-- Firecrawl source provider using `/v2/scrape` with markdown, html, and rawHtml output.
-- Docling source provider (experimental, PDFs and Office docs → markdown via Docling Serve API).
+- Firecrawl and Docling source providers.
 - Deterministic content transformers: Readability (article extraction) and mdream (HTML → markdown).
 - Optional LLM clean stage, optional LLM summarize stage, final truncation, and XML diagnostic footer.
 - YAML-driven configuration for pipelines, providers, content transformers, output renderers, and HTTP adapters.
@@ -22,27 +21,17 @@ Implemented today:
 
 Current provider implementations are intentionally few. The interfaces exist so replacements can be added without rewriting the use case.
 
-## Direction
-
-Deterministic extraction (readability + mdream) handles most pages in milliseconds. The next step is to make the pipeline self-aware: route through deterministic or LLM paths based on URL heuristics and per-step signals, reserving LLM passes for pages that need them.
-
 ## Coming soon
 
-1. **Conditional step execution based on signals.** Engine-level `skipIfSignal` / `runIfSignal` configuration on pipeline steps. When a signal name is set and the condition is met, the step is skipped entirely without running.
-2. **URL heuristic step to classify input.** A pipeline step that matches the URL against patterns (path, domain, expected content type) and sets runtime signals for downstream steps. Use the feature to avoid Readibility step on GitHub domain etc.
-3. **Route binary content to Docling.** Use the Docling source provider based on URL heuristics as an alternative to Firecrawl for PDFs and other binary content.
-4. **Keep summaries honest.** Extend the existing URL quality gate from all-or-nothing rejection into a deterministic repair pass, and implement fenced-code-block verification/repair.
-
-A couple of polish items ride along:
-
-- **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
-- **Better defaults and prompts.** Test and tune the shipped defaults and prompts.
+1. **Playwright source provider** to remove the hard dependency on a running Firecrawl instance for HTML pages.
+2. **LLM pass auto-repair.** Repair URLs and code blocks, instead of mere detection.
+3. **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
+4. **Better defaults and prompts.** Test and tune what ships.
 
 ## Short term
 
-Near-term additions once the pivot above settles.
+Near-term additions once the work above settles.
 
-- **Playwright source provider** to remove the hard dependency on a running Firecrawl instance for HTML pages.
 - **Docling content transformer** to convert PDFs, Office documents, and other document-type files to markdown.
 - **Crawl4AI source provider** as a potentially better alternative to Firecrawl.
 

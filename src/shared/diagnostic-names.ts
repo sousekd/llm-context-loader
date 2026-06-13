@@ -10,8 +10,12 @@ import { InternalError } from "./errors.js";
 
 const DIAGNOSTIC_NAME_PATTERN = /^[a-z][a-z0-9_]*$/;
 
+/** Returns whether a value is safe for diagnostic XML names and signal keys. */
+export function isDiagnosticName(name: string): boolean {
+  return DIAGNOSTIC_NAME_PATTERN.test(name);
+}
+
 /** Validates a diagnostic element, attribute, or step name. */
 export function assertDiagnosticName(name: string): void {
-  if (!DIAGNOSTIC_NAME_PATTERN.test(name))
-    throw new InternalError(`Invalid diagnostic name: ${name}`, "invalid_diagnostic_name");
+  if (!isDiagnosticName(name)) throw new InternalError(`Invalid diagnostic name: ${name}`, "invalid_diagnostic_name");
 }

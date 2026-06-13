@@ -9,6 +9,25 @@
 import { z } from "zod";
 
 import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../../shared/config-coercion.js";
+import { isDiagnosticName } from "../../shared/diagnostic-names.js";
+
+/** Represents recursive runIf/skipIf predicates without importing engine contracts into YAML parsing. */
+export type RawCondition =
+  | string
+  | { readonly all: ReadonlyArray<RawCondition> }
+  | { readonly any: ReadonlyArray<RawCondition> }
+  | { readonly not: RawCondition };
+
+const signalNameSchema = z.string().min(1).refine(isDiagnosticName, { message: "Invalid signal name" });
+
+const conditionSchema: z.ZodType<RawCondition> = z.lazy(() =>
+  z.union([
+    signalNameSchema,
+    z.object({ all: z.array(conditionSchema) }).strict(),
+    z.object({ any: z.array(conditionSchema) }).strict(),
+    z.object({ not: conditionSchema }).strict()
+  ])
+);
 
 const providerEntrySchema = z
   .object({
@@ -23,6 +42,9 @@ const stepSchema = z
     name: z.string().min(1),
     concurrencyGroup: z.string().min(1).optional(),
     timeoutSeconds: z.preprocess(emptyStringAsUndefined, z.coerce.number().int().positive().default(60)),
+    runIf: conditionSchema.optional(),
+    skipIf: conditionSchema.optional(),
+    enabled: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().optional()),
     config: z.unknown().default({})
   })
   .strict();

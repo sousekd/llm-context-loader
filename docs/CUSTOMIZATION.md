@@ -35,7 +35,7 @@ HTTP adapters also name the pipeline they expose:
 ```yaml
 some-adapter:
   type: open-webui
-  pipeline: ${DEFAULT_PIPELINE:-truncate}
+  pipeline: ${DEFAULT_PIPELINE:-full}
   config: {}
 ```
 
@@ -44,7 +44,7 @@ omitted, a pipeline is active only when at least one HTTP adapter references it.
 `enabled: false` parks it. Setting `enabled: true` pins it active regardless of adapter
 references. The shipped pipelines leave `enabled` omitted, so `DEFAULT_PIPELINE` alone drives
 the active set. Active-set pipelines are compiled and validated at startup; inactive ones are
-skipped (their providers are never built).
+excluded from compilation.
 
 Pipeline steps include common orchestration fields plus a type-specific `config` block:
 
@@ -53,10 +53,57 @@ Pipeline steps include common orchestration fields plus a type-specific `config`
   name: clean
   concurrencyGroup: llm
   timeoutSeconds: 90
+  enabled: false
+  runIf: binary_doc
+  skipIf: code_host
   config: {}
 ```
 
+`enabled` is an optional compile-time exclusion toggle (default `true`). When `enabled: false`,
+the step is completely excluded from compilation — it is never name-validated, never
+config-parsed, and never constructed. Its linked provider (if any) is never required, so
+missing provider configuration does not cause a startup failure. This differs from `runIf`
+and `skipIf`, which are runtime gates: a gated step is still compiled and appears in the
+footer as skipped.
+
+`runIf` and `skipIf` are optional per-step gates (`string` or structured predicate — see
+[Conditional step execution](#conditional-step-execution) below). When both are present,
+`runIf` is checked first.
+
 Step names must be unique within a pipeline and must be valid diagnostic names: lowercase letters, numbers, and underscores, starting with a lowercase letter.
+
+## Conditional Step Execution
+
+Pipeline steps support signal-based gating via `runIf` and `skipIf`. When the gate evaluates to false (or true, for `skipIf`), the step is recorded as `skipped` with a reserved reason (`run_if_unmet` or `skip_if_met`) without running. A gate is a predicate evaluated against runtime signals emitted by earlier steps (such as `classify-url`). The simplest form is a bare signal name:
+
+```yaml
+runIf: binary_doc # runs only when signal exists and is truthy
+skipIf: code_host # skips when signal exists and is truthy
+```
+
+Structured combinators let you build compound conditions:
+
+```yaml
+runIf:
+  all:
+    - binary_doc
+    - code_host
+
+skipIf:
+  any:
+    - is_pdf
+    - is_office_doc
+
+runIf:
+  not: binary_doc
+
+skipIf:
+  any:
+    - all: [binary_doc, code_host]
+    - not: processed
+```
+
+`all: []` is always true. `any: []` is always false. Truthy values: present and not `false`, `0`, or `""`.
 
 ## HTTP Adapters
 
@@ -139,27 +186,29 @@ config:
   baseUrl: ${FIRECRAWL_BASE_URL}
   apiKey: ${FIRECRAWL_API_KEY:-}
   output: markdown
-  onlyMainContent: true
-  stripBase64Images: true
-  parsePdf: true
+  options: ${FIRECRAWL_OPTIONS:-}
 ```
 
-| Knob                | Values                            | Default    | Purpose                                                                                                                                                                                                                                                                           |
-| ------------------- | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is "raw" — full JS-rendered DOM for web pages, viewer `<img>` wrapper for images, and bare extracted text for PDFs (use for Readability testing).                                                  |
-| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                                                                                                                                                                      |
-| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.                                                                                                                                                  |
-| `parsePdf`          | bool                              | `true`     | Configurable via `FIRECRAWL_PARSE_PDF`. When `true`, Firecrawl parses PDF files to extracted text. When `false`, raw PDF bytes are returned as a binary body (`application/pdf`) — the pipeline fails with `unconverted_binary` until a PDF converter (e.g. Docling) is wired up. |
+| Knob      | Values                            | Default    | Purpose                                                                                                                                                                                                                          |
+| --------- | --------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `output`  | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is "raw" — full JS-rendered DOM for web pages, viewer `<img>` wrapper for images, and bare extracted text for PDFs (use for Readability testing). |
+| `options` | object                            | `{}`       | Opaque passthrough merged into the Firecrawl `/v2/scrape` body. See [Opaque Passthrough Fields](#opaque-passthrough-fields).                                                                                                     |
+
+`output` stays typed because the provider depends on it: it selects the requested format, decides which response field to read (`data.markdown`, `data.html`, `data.rawHtml`), and sets the returned media type. The `formats` field in the request body is provider-managed and cannot be overridden through `options`.
+
+**Opaque `options`.** Every other Firecrawl scrape knob flows through `options` verbatim — `onlyMainContent`, `removeBase64Images`, `waitFor`, `timeout`, `maxAge`, `includeTags`, `excludeTags`, `blockAds`, `proxy`, `location`, `headers`, `mobile`, and all others. Omitted knobs use Firecrawl's server defaults (`onlyMainContent:true`, `removeBase64Images:true`, `parsers:["pdf"]`, etc.), so an empty `options` produces the same behavior as the previous explicit defaults.
+
+**PDF passthrough (raw bytes).** To return raw PDF bytes instead of parsed text (e.g. for Docling), set `parsers: []` in options: `options: '{"parsers":[]}'`. The provider detects the passthrough by base64-decoding the content and verifying the `%PDF` magic header, so the binary response is truthful regardless of the source's `Content-Type` header.
 
 The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent). The media type of returned bodies is derived truthfully:
 
-| `output` | HTML / docx source | image source    | PDF source (parsePdf:true) |
-| -------- | ------------------ | --------------- | -------------------------- |
-| markdown | `text/markdown`    | `text/markdown` | `text/markdown`            |
-| html     | `text/html`        | `text/html`     | `text/html` (wrapped)      |
-| rawHtml  | `text/html`        | `text/html`     | **`text/plain`**           |
+| `output` | HTML / docx source | image source    | PDF source (parsers default `["pdf"]`) |
+| -------- | ------------------ | --------------- | -------------------------------------- |
+| markdown | `text/markdown`    | `text/markdown` | `text/markdown`                        |
+| html     | `text/html`        | `text/html`     | `text/html` (wrapped)                  |
+| rawHtml  | `text/html`        | `text/html`     | **`text/plain`**                       |
 
-`rawHtml` is "raw": for web pages and images it returns HTML, but for PDFs it returns bare extracted text. The provider detects this by looking at whether the content starts with an HTML tag — if not, it labels it `text/plain` so downstream transformers (which gate on `isHtmlMediaType`) skip it correctly. When `parsePdf:false`, PDFs are returned as binary (`application/pdf`) from base64-decoded raw bytes supplied by Firecrawl's empty-`parsers` mode.
+`rawHtml` is "raw": for web pages and images it returns HTML, but for PDFs it returns bare extracted text. The provider detects this by looking at whether the content starts with an HTML tag — if not, it labels it `text/plain` so downstream transformers (which gate on `isHtmlMediaType`) skip it correctly.
 
 ### `docling`
 
@@ -168,17 +217,19 @@ config:
   baseUrl: ${DOCLING_BASE_URL}
   apiKey: ${DOCLING_API_KEY:-}
   output: markdown
-  doOcr: true
-  tableMode: accurate
+  options: ${DOCLING_OPTIONS:-}
 ```
 
-| Knob        | Values               | Default    | Purpose                                                                                                                                                |
-| ----------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `output`    | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
-| `doOcr`     | bool                 | `true`     | Run OCR on scanned documents and images within PDFs.                                                                                                   |
-| `tableMode` | `fast` \| `accurate` | `accurate` | Table extraction quality. `accurate` is slower but better for complex layouts.                                                                         |
+| Knob      | Values               | Default    | Purpose                                                                                                                                                |
+| --------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `output`  | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
+| `options` | object               | `{}`       | Opaque passthrough merged into the Docling convert `options` body. See [Opaque Passthrough Fields](#opaque-passthrough-fields).                        |
 
-The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name` (the JSON format is always requested internally regardless of the `output` setting). Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
+`output` stays typed because the provider depends on it: it selects the requested formats, decides whether to read `md_content` or `html_content`, and sets the returned media type. The JSON format is always requested internally (for the title from `document.json_content.name`), so `to_formats` is provider-managed and cannot be overridden through `options`.
+
+**Opaque `options`.** Every other Docling convert knob flows through `options` verbatim. The provider-managed `to_formats` value is applied after `options` and cannot be overridden, because the provider depends on it to read the response correctly.
+
+The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
 
 ## Content Transformers
 
@@ -249,7 +300,7 @@ config:
 
 The provider joins `baseUrl` with `/chat/completions`; for OpenAI-compatible servers this usually means configuring a `/v1` base URL. It sends `model` and `messages`, using only `system` and `user` roles. `extraBody` is spread into the request body after the standard fields, so it can provide sampler or server-specific parameters.
 
-Values inside `extraBody` are opaque YAML values. YAML booleans and numbers stay typed, but env placeholders inside `extraBody` substitute as strings.
+`extraBody` is an opaque passthrough field; see [Opaque Passthrough Fields](#opaque-passthrough-fields).
 
 One provider instance corresponds to one model. To use several models against the same server, declare additional `openai-chat` instances with different names and `model` values.
 
@@ -258,6 +309,26 @@ Context-fit fields are optional and own the char-to-token conversion:
 - `contextTokens` — model context window. Leaving it empty disables the context-fit gate, and the provider always reports prompts as fitting.
 - `charsPerToken` — conservative chars-per-token estimator. Lower values reject more aggressively. Default `3.5`. This is a character-based approximation rather than a real tokenizer.
 - `safetyMarginTokens` — extra tokens reserved for chat-template framing or estimator drift. Default `0` in the provider schema; the bundled YAML defaults it to `128` via `LLM_SAFETY_MARGIN_TOKENS`. Increase if the model still rejects prompts the gate accepts.
+
+## Opaque Passthrough Fields
+
+Several providers expose an opaque record field that is merged verbatim into the outgoing request body — `extraBody` (openai-chat), `options` (docling), `options` (firecrawl), and future source providers. These records support **three authoring modes**:
+
+| Mode                       | Example                                            | Behavior                                                                                                |
+| -------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Inline YAML object         | `options:\n  do_ocr: true\n  table_mode: accurate` | Typed YAML values (booleans stay booleans, etc.)                                                        |
+| Single env var (JSON blob) | `options: ${DOCLING_OPTIONS:-}`                    | The env value is `JSON.parse`'d into an object; blank/unset → `{}`                                      |
+| Mixed (not recommended)    | `options:\n  do_ocr: ${ENV_BOOL:-true}`            | Env placeholders substitute as **strings**, not their original type. Prefer one of the two modes above. |
+
+The single-env-var mode is convenient when you have many keys or inconsistent per-deployment values. Your env file holds the entire object:
+
+```dotenv
+DOCLING_OPTIONS='{"do_ocr":true,"table_mode":"accurate"}'
+```
+
+The JSON blob is parsed once by the shared `jsonStringAsObjectOrUndefined` preprocessor before the schema validates it as a record. Nested values (`picture_description_api`) are real objects — unlike Open WebUI's approach, there is **no double-encoding**.
+
+All opaque fields use the same preprocessor, so the three authoring modes and their limitation (env placeholders inside inline YAML objects substitute as strings) apply consistently everywhere.
 
 ## Pipelines
 
@@ -275,17 +346,40 @@ pipelines:
 
 `outputRenderer` references a named output renderer instance. `limiters` declares concurrency group names and their maximum concurrency. A step can opt into a group with `concurrencyGroup`.
 
-Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the `clean-llm` pipeline, `llm-pass(clean)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
+Adjacent steps that share the same `concurrencyGroup` share one limiter acquisition. In the `full` pipeline, `llm-pass(clean_llm)`, `verify_after_clean`, `llm-pass(summarize)`, and `verify_after_summarize` all use the `llm` group, so a URL holds one LLM workflow slot across both passes and their URL checks. Inserting a step with a different (or no) group between them splits that acquisition.
 
 `timeoutSeconds` applies to both limiter waiting and step execution. For one adjacent concurrency block, limiter waiting uses the longest `timeoutSeconds` value in that block.
 
 ## Steps
 
+### `classify-url`
+
+```yaml
+config:
+  rules:
+    - signal: binary_doc
+      extensionIn: [pdf, docx, doc, pptx, ppt, xlsx, xls]
+    - signal: code_host
+      anyHost: [github.com, gitlab.com, bitbucket.org]
+    - signal: is_html_article
+      pattern: "/articles/\\d+"
+```
+
+Inspects the input URL against a list of rules and emits boolean signals (`true`) for each match. Placed as the first step in a pipeline, `classify-url` lets downstream steps react through `runIf`/`skipIf`. Each rule must have exactly one matcher:
+
+| Matcher       | Matches when                                                                  |
+| ------------- | ----------------------------------------------------------------------------- |
+| `pattern`     | URL matches the regex pattern                                                 |
+| `anyHost`     | URL hostname equals one of the listed hosts (or is a subdomain, www‑stripped) |
+| `extensionIn` | URL pathname ends with one of the listed extensions (case‑insensitive)        |
+
+Multiple rules may share the same `signal` name for natural OR semantics. The `matched` diagnostic attribute lists all matched signal names (space‑separated) or `"none"`.
+
 ### `load-source`
 
 ```yaml
 config:
-  provider: ${SOURCE_PROVIDER:-http-default}
+  provider: http-default
 ```
 
 Loads the initial body from a named source provider. If a body already exists, the step skips with `body_present`.
@@ -398,36 +492,37 @@ Shipped defaults: `verify_after_clean` uses `rollback` with `maxReportedUrls: 0`
 
 ## Shipped Pipelines
 
-The config ships four pipelines, selected via `DEFAULT_PIPELINE` (defaults to `truncate`).
+The config ships two pipelines, selected via `DEFAULT_PIPELINE` (defaults to `full`).
 
-### `truncate` (default)
-
-```text
-load-source(http-default) -> truncate
-```
-
-Fetches the URL directly and truncates to budget. No external services required.
-
-### `clean-deterministic`
+### `full` (default)
 
 ```text
-load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> truncate
+classify-url -> load-source(docling-default)* -> load-source(firecrawl-html)* -> load-source(http-default) -> transform(clean via readability)* -> transform(convert via mdream) -> capture-urls -> llm-pass(clean_llm)* -> verify-urls(rollback)* -> llm-pass(summarize)* -> verify-urls(report)* -> truncate
+  * toggleable via env var (see below)
 ```
 
-Loads Firecrawl raw HTML, extracts article HTML with `readability` when suitable, converts HTML to markdown with `mdream`, then truncates. No LLM passes. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-deterministic`.
+The full-featured pipeline. Uses `classify-url` for binary-doc and code-host detection, tries
+Docling OCR for binary documents, tries Firecrawl, then falls back to native HTTP fetch,
+extracts article content with Readability, converts to markdown, captures URLs, and runs
+optional LLM passes (clean and/or summarize) with URL-hallucination verification.
 
-### `clean-llm`
+Selected steps can be toggled via environment variables:
+
+| Step(s)               | Env toggle              | Default | External dependency required when enabled              |
+| --------------------- | ----------------------- | ------- | ------------------------------------------------------ |
+| `fetch_docling`       | `DOCLING_ENABLED`       | false   | `DOCLING_BASE_URL` (+ optional `DOCLING_API_KEY`)      |
+| `fetch_firecrawl`     | `FIRECRAWL_ENABLED`     | false   | `FIRECRAWL_BASE_URL` (+ optional `FIRECRAWL_API_KEY`)  |
+| `clean` (readability) | `READABILITY_ENABLED`   | true    | _(local; no external service needed)_                  |
+| `clean_llm` + verify  | `LLM_CLEAN_ENABLED`     | false   | `LLM_BASE_URL`, `LLM_MODEL` (+ optional `LLM_API_KEY`) |
+| `summarize` + verify  | `LLM_SUMMARIZE_ENABLED` | false   | `LLM_BASE_URL`, `LLM_MODEL` (+ optional `LLM_API_KEY`) |
+
+Select with `DEFAULT_PIPELINE=full`.
+
+### `smoke`
 
 ```text
-load-source(firecrawl-markdown) -> capture-urls -> llm-pass(clean) -> verify-urls(rollback) -> llm-pass(summarize) -> verify-urls(report) -> truncate
+load-source(http-default) -> transform(convert via mdream-aggressive) -> truncate
 ```
 
-The original reference pipeline. Loads markdown from a Firecrawl instance, runs clean and summarize LLM passes with URL-hallucination gates, then truncates. Pipeline fallback: `firecrawl-markdown`. Select with `DEFAULT_PIPELINE=clean-llm`.
-
-### `clean-combined`
-
-```text
-load-source(firecrawl-html) -> transform(clean via readability) -> transform(convert via mdream) -> capture-urls -> llm-pass(summarize) -> verify-urls(report) -> truncate
-```
-
-Combines the deterministic HTML-to-markdown path with an LLM summarize pass. Pipeline fallback: `firecrawl-html`. Select with `DEFAULT_PIPELINE=clean-combined`.
+Minimal test pipeline with zero external dependencies. Native HTTP fetch, aggressive markdown
+conversion, and truncation. Select with `DEFAULT_PIPELINE=smoke`.

@@ -1,22 +1,22 @@
 /**
  * Parses YAML configuration for the built-in Firecrawl source provider.
  *
- * Environment substitution runs before this schema, so numeric and boolean
- * fields use shared preprocessors to treat blank placeholders as omitted values.
+ * Environment substitution runs before this schema, so blank fields use shared
+ * preprocessors. `output` stays typed because it drives the requested formats,
+ * the response field read, and the returned media type. Remaining Firecrawl
+ * scrape knobs flow through the shared opaque-record preprocessor.
  */
 
 import { z } from "zod";
 
-import { booleanStringAsBooleanOrUndefined } from "../../../shared/config-coercion.js";
+import { emptyStringAsUndefined, jsonStringAsObjectOrUndefined } from "../../../shared/config-coercion.js";
 
 const firecrawlConfigSchema = z
   .object({
     baseUrl: z.string().min(1, "firecrawl baseUrl is required").url("firecrawl baseUrl must be a valid URL"),
     apiKey: z.string().default(""),
-    output: z.enum(["markdown", "html", "rawHtml"]).default("markdown"),
-    onlyMainContent: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
-    stripBase64Images: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
-    parsePdf: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true))
+    output: z.preprocess(emptyStringAsUndefined, z.enum(["markdown", "html", "rawHtml"]).default("markdown")),
+    options: z.preprocess(jsonStringAsObjectOrUndefined, z.record(z.unknown()).default({}))
   })
   .strict();
 

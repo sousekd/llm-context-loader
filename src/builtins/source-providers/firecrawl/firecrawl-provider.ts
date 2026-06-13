@@ -56,10 +56,8 @@ export class FirecrawlProvider implements SourceProvider {
         headers: this.headers(),
         body: JSON.stringify({
           url,
-          formats: [this.config.output],
-          onlyMainContent: this.config.onlyMainContent,
-          removeBase64Images: this.config.stripBase64Images,
-          parsers: this.config.parsePdf ? ["pdf"] : []
+          ...this.config.options,
+          formats: [this.config.output]
         })
       });
 
@@ -93,25 +91,10 @@ export class FirecrawlProvider implements SourceProvider {
           upstreamStatus: response.status
         });
       const title = data.title ?? (typeof metadata.title === "string" ? metadata.title : undefined);
-      const contentType = typeof metadata.contentType === "string" ? metadata.contentType : "";
 
-      if (!this.config.parsePdf) {
-        const essence = contentType.split(";", 1)[0].trim().toLowerCase();
-        if (essence === mediaTypes.pdf) {
-          const raw = extractBase64Payload(content, this.config.output);
-          if (!raw) {
-            throw new UpstreamError("Firecrawl returned empty base64 PDF payload", "empty", {
-              upstreamStatus: response.status
-            });
-          }
-          const bytes = Buffer.from(raw, "base64");
-          if (bytes.byteLength === 0) {
-            throw new UpstreamError("Firecrawl returned empty PDF bytes after base64 decode", "empty", {
-              upstreamStatus: response.status
-            });
-          }
-          return { kind: "binary", bytes, mediaType: mediaTypes.pdf, title };
-        }
+      const pdfBytes = decodePdfPassthrough(content, this.config.output);
+      if (pdfBytes) {
+        return { kind: "binary", bytes: pdfBytes, mediaType: mediaTypes.pdf, title };
       }
 
       const mediaType = deriveTextMediaType(this.config.output, content);
@@ -128,6 +111,29 @@ export class FirecrawlProvider implements SourceProvider {
     if (this.config.apiKey) headers.authorization = `Bearer ${this.config.apiKey}`;
     return headers;
   }
+}
+
+/**
+ * Attempts to decode a base64 PDF payload from Firecrawl content.
+ *
+ * With empty parsers (options:{parsers:[]}), Firecrawl returns the raw file
+ * bytes as base64. When output=html, the base64 is wrapped in
+ * `<html><body>…</body></html>`. This function unwraps if needed, gates on the
+ * PDF base64 prefix (`JVBERi0`), decodes, and verifies the `%PDF` magic header.
+ * Returns undefined when the content is not a PDF passthrough.
+ */
+function decodePdfPassthrough(content: string, output: string): Buffer | undefined {
+  const candidate = extractBase64Payload(content, output);
+  if (!candidate || !candidate.startsWith("JVBERi0")) return undefined;
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(candidate, "base64");
+  } catch {
+    return undefined;
+  }
+  if (bytes.byteLength < 4) return undefined;
+  if (bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46) return undefined;
+  return bytes;
 }
 
 /**

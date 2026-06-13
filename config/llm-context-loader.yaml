@@ -4,13 +4,13 @@ schemaVersion: 1
 httpAdapters:
   open-webui:
     type: open-webui
-    pipeline: ${DEFAULT_PIPELINE:-truncate}
+    pipeline: ${DEFAULT_PIPELINE:-full}
     config:
       auth:
         bearerToken: ${OWUI_AUTH_TOKEN:-}
   jina:
     type: jina
-    pipeline: ${DEFAULT_PIPELINE:-truncate}
+    pipeline: ${DEFAULT_PIPELINE:-full}
     config:
       auth:
         bearerToken: ${JINA_AUTH_TOKEN:-}
@@ -40,24 +40,21 @@ sourceProviders:
       baseUrl: ${FIRECRAWL_BASE_URL:-}
       apiKey: ${FIRECRAWL_API_KEY:-}
       output: rawHtml
-      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
+      options: ${FIRECRAWL_OPTIONS:-}
   firecrawl-markdown:
     type: firecrawl
     config:
       baseUrl: ${FIRECRAWL_BASE_URL:-}
       apiKey: ${FIRECRAWL_API_KEY:-}
       output: markdown
-      onlyMainContent: true
-      stripBase64Images: true
-      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
-  docling-ocr:
+      options: ${FIRECRAWL_OPTIONS:-}
+  docling-default:
     type: docling
     config:
       baseUrl: ${DOCLING_BASE_URL:-}
       apiKey: ${DOCLING_API_KEY:-}
       output: markdown
-      doOcr: true
-      tableMode: accurate
+      options: ${DOCLING_OPTIONS:-}
 
 # Content transformers rewrite the body between representations (e.g. HTML to markdown).
 contentTransformers:
@@ -89,39 +86,51 @@ llmProviders:
       safetyMarginTokens: ${LLM_SAFETY_MARGIN_TOKENS:-128}
       extraBody: {}
 
-# Shipped pipelines. DEFAULT_PIPELINE selects which is active (truncate by default).
+# Shipped pipelines. DEFAULT_PIPELINE selects which is active (full by default).
 pipelines:
-  truncate:
-    outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
-    limiters:
-      source: ${SOURCE_CONCURRENCY:-1}
-    steps:
-      - type: load-source
-        name: fetch
-        concurrencyGroup: source
-        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
-        config:
-          provider: ${SOURCE_PROVIDER:-http-default}
-      - type: truncate
-        name: truncate
-        config:
-          targetChars: ${OUTPUT_TARGET_CHARS:-25000}
-
-  clean-deterministic:
+  full:
     outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
     limiters:
       source: ${SOURCE_CONCURRENCY:-1}
       process: ${PROCESS_CONCURRENCY:-5}
+      llm: ${LLM_CONCURRENCY:-1}
     steps:
-      - type: load-source
-        name: fetch
-        concurrencyGroup: source
-        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+      - type: classify-url
+        name: classify
         config:
-          provider: ${SOURCE_PROVIDER:-firecrawl-html}
+          rules:
+            - signal: binary_doc
+              extensionIn: [pdf, docx, doc, pptx, ppt, xlsx, xls]
+            - signal: binary_doc
+              pattern: "/pdf/\\d+(\\.\\d+)?($|\\?|#)"
+            - signal: code_host
+              anyHost: [github.com, gitlab.com, bitbucket.org]
+      - type: load-source
+        name: fetch_docling
+        concurrencyGroup: source
+        enabled: ${DOCLING_ENABLED:-false}
+        runIf: binary_doc
+        timeoutSeconds: ${DOCLING_TIMEOUT_SECONDS:-60}
+        config:
+          provider: docling-default
+      - type: load-source
+        name: fetch_firecrawl
+        concurrencyGroup: source
+        enabled: ${FIRECRAWL_ENABLED:-false}
+        timeoutSeconds: ${FIRECRAWL_TIMEOUT_SECONDS:-20}
+        config:
+          provider: firecrawl-html
+      - type: load-source
+        name: fetch_http
+        concurrencyGroup: source
+        timeoutSeconds: ${FETCH_TIMEOUT_SECONDS:-20}
+        config:
+          provider: http-default
       - type: transform
         name: clean
         concurrencyGroup: process
+        enabled: ${READABILITY_ENABLED:-true}
+        skipIf: code_host
         config:
           transformer: readability-default
           target: text/html
@@ -131,35 +140,19 @@ pipelines:
         config:
           transformer: mdream-convert
           target: text/markdown
-      - type: truncate
-        name: truncate
-        config:
-          targetChars: ${OUTPUT_TARGET_CHARS:-25000}
-
-  clean-llm:
-    outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
-    limiters:
-      source: ${SOURCE_CONCURRENCY:-1}
-      llm: ${LLM_CONCURRENCY:-1}
-    steps:
-      - type: load-source
-        name: fetch
-        concurrencyGroup: source
-        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
-        config:
-          provider: ${SOURCE_PROVIDER:-firecrawl-markdown}
       - type: capture-urls
         name: capture_source_urls
-        concurrencyGroup: source
+        concurrencyGroup: process
         config:
           artifact: trusted-urls
       - type: llm-pass
-        name: clean
+        name: clean_llm
         concurrencyGroup: llm
-        timeoutSeconds: ${CLEAN_TIMEOUT_SECONDS:-60}
+        enabled: ${LLM_CLEAN_ENABLED:-false}
+        timeoutSeconds: ${LLM_CLEAN_TIMEOUT_SECONDS:-60}
         config:
           provider: llm-default
-          minInputChars: ${CLEAN_MIN_INPUT_CHARS:-1000}
+          minInputChars: ${LLM_CLEAN_MIN_INPUT_CHARS:-1000}
           outputReserveRatio: 1.0
           templates:
             system: ../templates/clean.system.md
@@ -167,6 +160,7 @@ pipelines:
       - type: verify-urls
         name: verify_after_clean
         concurrencyGroup: llm
+        enabled: ${LLM_CLEAN_ENABLED:-false}
         config:
           artifact: trusted-urls
           onHallucination: rollback
@@ -174,7 +168,8 @@ pipelines:
       - type: llm-pass
         name: summarize
         concurrencyGroup: llm
-        timeoutSeconds: ${SUMMARIZE_TIMEOUT_SECONDS:-60}
+        enabled: ${LLM_SUMMARIZE_ENABLED:-false}
+        timeoutSeconds: ${LLM_SUMMARIZE_TIMEOUT_SECONDS:-60}
         config:
           provider: llm-default
           minInputChars: ${OUTPUT_TARGET_CHARS:-25000}
@@ -187,6 +182,7 @@ pipelines:
       - type: verify-urls
         name: verify_after_summarize
         concurrencyGroup: llm
+        enabled: ${LLM_SUMMARIZE_ENABLED:-false}
         config:
           artifact: trusted-urls
           onHallucination: report
@@ -196,56 +192,24 @@ pipelines:
         config:
           targetChars: ${OUTPUT_TARGET_CHARS:-25000}
 
-  clean-combined:
+  smoke:
     outputRenderer: ${DEFAULT_OUTPUT_RENDERER:-debug-xml}
     limiters:
       source: ${SOURCE_CONCURRENCY:-1}
       process: ${PROCESS_CONCURRENCY:-5}
-      llm: ${LLM_CONCURRENCY:-1}
     steps:
       - type: load-source
         name: fetch
         concurrencyGroup: source
-        timeoutSeconds: ${LOAD_SOURCE_TIMEOUT_SECONDS:-20}
+        timeoutSeconds: ${FETCH_TIMEOUT_SECONDS:-20}
         config:
-          provider: ${SOURCE_PROVIDER:-firecrawl-html}
-      - type: transform
-        name: clean
-        concurrencyGroup: process
-        config:
-          transformer: readability-default
-          target: text/html
+          provider: http-default
       - type: transform
         name: convert
         concurrencyGroup: process
         config:
-          transformer: mdream-convert
+          transformer: mdream-aggressive
           target: text/markdown
-      - type: capture-urls
-        name: capture_source_urls
-        concurrencyGroup: process
-        config:
-          artifact: trusted-urls
-      - type: llm-pass
-        name: summarize
-        concurrencyGroup: llm
-        timeoutSeconds: ${SUMMARIZE_TIMEOUT_SECONDS:-60}
-        config:
-          provider: llm-default
-          minInputChars: ${OUTPUT_TARGET_CHARS:-25000}
-          outputReserveChars: ${OUTPUT_TARGET_CHARS:-25000}
-          templates:
-            system: ../templates/summarize.system.md
-            user: ../templates/summarize.user.md
-            vars:
-              targetChars: ${OUTPUT_TARGET_CHARS:-25000}
-      - type: verify-urls
-        name: verify_after_summarize
-        concurrencyGroup: llm
-        config:
-          artifact: trusted-urls
-          onHallucination: report
-          maxReportedUrls: 50
       - type: truncate
         name: truncate
         config:

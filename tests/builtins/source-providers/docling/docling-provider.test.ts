@@ -21,7 +21,7 @@ describe("DoclingProvider", () => {
       });
     };
     const provider = new DoclingProvider(
-      parseDoclingConfig({ baseUrl: "http://docling.example", doOcr: false, tableMode: "fast" }),
+      parseDoclingConfig({ baseUrl: "http://docling.example", options: { do_ocr: false, table_mode: "fast" } }),
       { httpFetch: fetchFn, logger: createTestLogger() }
     );
 
@@ -30,10 +30,9 @@ describe("DoclingProvider", () => {
     expect(requestBody).toEqual({
       sources: [{ kind: "http", url: "https://example.com" }],
       options: {
-        to_formats: ["md", "json"],
-        image_export_mode: "placeholder",
         do_ocr: false,
-        table_mode: "fast"
+        table_mode: "fast",
+        to_formats: ["md", "json"]
       }
     });
     expect(document).toEqual({ kind: "text", content: "# hello", mediaType: "text/markdown", title: "Hello" });
@@ -60,6 +59,29 @@ describe("DoclingProvider", () => {
       options: { to_formats: ["html", "json"] }
     });
     expect(document).toEqual({ kind: "text", content: "<p>Hello</p>", mediaType: "text/html", title: "Hello" });
+  });
+
+  it("passes opaque options but keeps to_formats provider-managed", async () => {
+    let requestBody: { options?: Record<string, unknown> } | undefined;
+    const fetchFn: typeof fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({ document: { md_content: "# ok" }, status: "success", processing_time: 0.5 });
+    };
+    const provider = new DoclingProvider(
+      parseDoclingConfig({
+        baseUrl: "http://docling.example",
+        options: { image_export_mode: "embedded", force_ocr: true, to_formats: ["html"] }
+      }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(requestBody?.options).toEqual({
+      image_export_mode: "embedded",
+      force_ocr: true,
+      to_formats: ["md", "json"]
+    });
   });
 
   it("accepts partial_success status and missing title", async () => {

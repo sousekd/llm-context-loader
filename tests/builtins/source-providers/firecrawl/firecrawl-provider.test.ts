@@ -8,7 +8,7 @@ import { createTestLogger } from "../../../helpers/logger.js";
 import { jsonResponse } from "../../../helpers/responses.js";
 
 describe("FirecrawlProvider", () => {
-  it("sends the supported scrape request and returns markdown content", async () => {
+  it("sends the scrape request with only provider-managed fields and returns markdown", async () => {
     let requestBody: Record<string, unknown> | undefined;
     const fetchFn: typeof fetch = async (input, init) => {
       requestBody = JSON.parse(String(init?.body));
@@ -16,28 +16,43 @@ describe("FirecrawlProvider", () => {
       expect(init?.method).toBe("POST");
       return jsonResponse({ success: true, data: { markdown: "# hello", metadata: { title: "Hello" } } });
     };
-    const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({
-        baseUrl: "https://firecrawl.example",
-        apiKey: "",
-        output: "markdown",
-        onlyMainContent: false,
-        stripBase64Images: true,
-        parsePdf: true
-      }),
-      { httpFetch: fetchFn, logger: createTestLogger() }
-    );
+    const provider = new FirecrawlProvider(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" }), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(requestBody).toEqual({
       url: "https://example.com",
-      formats: ["markdown"],
-      onlyMainContent: false,
-      removeBase64Images: true,
-      parsers: ["pdf"]
+      formats: ["markdown"]
     });
     expect(document).toEqual({ kind: "text", content: "# hello", mediaType: "text/markdown", title: "Hello" });
+  });
+
+  it("merges options into the body and locks formats last", async () => {
+    let requestBody: Record<string, unknown> | undefined;
+    const fetchFn: typeof fetch = async (_input, init) => {
+      requestBody = JSON.parse(String(init?.body));
+      return jsonResponse({ success: true, data: { markdown: "merged" } });
+    };
+    const provider = new FirecrawlProvider(
+      parseFirecrawlConfig({
+        baseUrl: "https://firecrawl.example",
+        output: "markdown",
+        options: { onlyMainContent: false, removeBase64Images: true, formats: ["should-be-overridden"] }
+      }),
+      { httpFetch: fetchFn, logger: createTestLogger() }
+    );
+
+    await provider.load("https://example.com", { signal: new AbortController().signal });
+
+    expect(requestBody).toMatchObject({
+      url: "https://example.com",
+      onlyMainContent: false,
+      removeBase64Images: true
+    });
+    expect(requestBody?.formats).toEqual(["markdown"]);
   });
 
   it("returns html content when output is html", async () => {
@@ -166,7 +181,7 @@ describe("FirecrawlProvider", () => {
     });
   });
 
-  it("returns binary body when parsePdf is false for a PDF", async () => {
+  it("returns binary body when content is %PDF base64 passthrough", async () => {
     const base64Payload = Buffer.from("%PDF-1.4 test document").toString("base64");
     const fetchFn: typeof fetch = async (_input, init) => {
       return jsonResponse({
@@ -175,7 +190,7 @@ describe("FirecrawlProvider", () => {
       });
     };
     const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown", parsePdf: false }),
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown" }),
       { httpFetch: fetchFn, logger: createTestLogger() }
     );
 
@@ -188,7 +203,7 @@ describe("FirecrawlProvider", () => {
     }
   });
 
-  it("strips html wrapper from binary base64 when parsePdf is false and output is html", async () => {
+  it("strips html wrapper before %PDF content sniff when output is html", async () => {
     const payload = "<html><body>JVBERi0xLjQK</body></html>";
     const fetchFn: typeof fetch = async () => {
       return jsonResponse({
@@ -197,7 +212,7 @@ describe("FirecrawlProvider", () => {
       });
     };
     const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html", parsePdf: false }),
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "html" }),
       { httpFetch: fetchFn, logger: createTestLogger() }
     );
 
@@ -209,9 +224,9 @@ describe("FirecrawlProvider", () => {
     }
   });
 
-  it("returns text body when parsePdf is false for a non-PDF (HTML) source", async () => {
+  it("returns text body for non-PDF content (HTML markdown)", async () => {
     const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown", parsePdf: false }),
+      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", output: "markdown" }),
       {
         httpFetch: async () =>
           jsonResponse({
@@ -234,59 +249,41 @@ describe("FirecrawlProvider", () => {
     });
   });
 
-  it("returns text body when parsePdf is false for an image source", async () => {
-    const base64Payload = Buffer.from("RIFF fake").toString("base64");
+  it("returns text body for non-PDF base64 content", async () => {
+    const base64Payload = Buffer.from("RIFF fake image").toString("base64");
     const fetchFn: typeof fetch = async () => {
       return jsonResponse({
         success: true,
         data: {
-          markdown: `![](https://example.com/img.jpg)`,
+          markdown: base64Payload,
           metadata: { contentType: "image/png" }
         }
       });
     };
-    const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
-      { httpFetch: fetchFn, logger: createTestLogger() }
-    );
+    const provider = new FirecrawlProvider(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" }), {
+      httpFetch: fetchFn,
+      logger: createTestLogger()
+    });
 
     const document = await provider.load("https://example.com", { signal: new AbortController().signal });
 
     expect(document.kind).toBe("text");
+    if (document.kind === "text") expect(document.content).toBe(base64Payload);
   });
 
-  it("rejects empty base64 when parsePdf is false for PDF", async () => {
-    const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
-      {
-        httpFetch: async () =>
-          jsonResponse({
-            success: true,
-            data: { markdown: "", metadata: { contentType: "application/pdf" } }
-          }),
-        logger: createTestLogger()
-      }
-    );
+  it("rejects empty content as upstream empty", async () => {
+    const provider = new FirecrawlProvider(parseFirecrawlConfig({ baseUrl: "https://firecrawl.example" }), {
+      httpFetch: async () =>
+        jsonResponse({
+          success: true,
+          data: { markdown: "", metadata: { contentType: "application/pdf" } }
+        }),
+      logger: createTestLogger()
+    });
 
     await expect(provider.load("https://example.com", { signal: new AbortController().signal })).rejects.toMatchObject({
       upstreamCode: "empty"
     });
-  });
-
-  it("omits parsers when parsePdf is false", async () => {
-    let requestBody: Record<string, unknown> | undefined;
-    const fetchFn: typeof fetch = async (_input, init) => {
-      requestBody = JSON.parse(String(init?.body));
-      return jsonResponse({ success: true, data: { markdown: "ok" } });
-    };
-    const provider = new FirecrawlProvider(
-      parseFirecrawlConfig({ baseUrl: "https://firecrawl.example", parsePdf: false }),
-      { httpFetch: fetchFn, logger: createTestLogger() }
-    );
-
-    await provider.load("https://example.com", { signal: new AbortController().signal });
-
-    expect(requestBody?.parsers).toEqual([]);
   });
 
   it("accepts top-level response fields for any output format", async () => {

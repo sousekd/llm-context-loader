@@ -30,21 +30,25 @@ $env:SEARX_BASE = 'http://<your-searxng-host>:<port>'
 ./scripts/smoke-jina.ps1 -Urls @('https://example.com/article', 'https://example.com/file.pdf')
 ```
 
-## Choosing a Source Provider
+## Choosing a Pipeline and Toggle Set
 
-`SOURCE_PROVIDER` selects one of the source providers declared in the YAML config. Read the config for the current names, then run the set against each backend you care about. The provider categories behave differently, which is the usual "is this broken or expected?" question:
+The shipped pipelines are `full` (default) and `smoke`; `DEFAULT_PIPELINE` selects the one
+exposed by the HTTP adapters. External-dependent steps are toggled off by default via env vars
+— set them to `true` to enable, and provide their required service URLs. The provider
+categories behave differently:
 
-- **Native fetch** — requests the URL directly, no external service. Content it cannot turn into text (PDFs, images) returns a failed result with a binary-rejection error.
-- **External scraper** — hands fetching and cleanup to an external service that handles many content types, including PDFs. Reads its base URL from the environment.
-- **Document converter** — converts uploaded documents (PDF, Office, images) to markdown. It does not scrape generic HTML pages; those come back as an empty-source failure. Pair it with document URLs.
-
-Providers that depend on an external service read the hostname from the environment — never hard-code hosts in the doc or scripts.
+- **Native HTTP fetch** — requests the URL directly, no external service. Always enabled in
+  `full` (last-resort fallback after Docling and Firecrawl) and in `smoke`.
+- **Firecrawl** — external scraper. Toggle with `FIRECRAWL_ENABLED=true` + `FIRECRAWL_BASE_URL`.
+- **Docling OCR** — document-to-markdown converter. Toggle with `DOCLING_ENABLED=true` +
+  `DOCLING_BASE_URL`. Gated by `runIf: binary_doc`.
+- **LLM passes** — clean and/or summarize. Toggle with `LLM_CLEAN_ENABLED=true` /
+  `LLM_SUMMARIZE_ENABLED=true` + `LLM_BASE_URL` + `LLM_MODEL`.
 
 ## Running Locally (Node)
 
 ```powershell
-# SOURCE_PROVIDER is read once at startup — set it BEFORE starting the server.
-$env:SOURCE_PROVIDER = '<provider-name>'
+# Step toggles and provider URLs are read once at startup — set them BEFORE starting.
 npm run dev
 
 # In a second terminal:
@@ -60,13 +64,13 @@ Get-Process -Name node -ErrorAction SilentlyContinue |
   Stop-Process -Force -ErrorAction SilentlyContinue
 ```
 
-Changing `$env:SOURCE_PROVIDER` while the server runs has no effect — restart it.
+Changing env vars while the server runs has no effect — restart it.
 
 ## Running in Docker
 
 ```powershell
 # Compose reads variables from the .env FILE. Terminal $env: vars are NOT passed in.
-# Edit SOURCE_PROVIDER in .env first, then:
+# Edit toggles and provider URLs in .env first, then:
 docker compose build      # only when source code changed
 docker compose up -d
 ./scripts/smoke-jina.ps1 -UrlFile scripts/out/urls-smoke.txt -HealthTimeoutSec 30 -Concurrency 2
@@ -109,7 +113,7 @@ A `result="failed"` with `final_length=0` does not imply a pipeline bug by itsel
 ## Common Traps
 
 - [ ] `SEARX_BASE` exported before `gather-urls.ps1`? It falls back to localhost otherwise.
-- [ ] `SOURCE_PROVIDER` set **before** `npm run dev`? It is read once at startup.
+- [ ] Step toggles (`FIRECRAWL_ENABLED`, `DOCLING_ENABLED`, `LLM_CLEAN_ENABLED`, `LLM_SUMMARIZE_ENABLED`) set **before** `npm run dev`? They are read once at startup.
 - [ ] `DEFAULT_PIPELINE` set **before** `npm run dev`? It is also read once at startup.
 - [ ] For Docker, edited `.env` rather than a terminal `$env:` var? Compose only reads the file.
 - [ ] Previous server stopped before switching providers? Otherwise the port stays taken.
@@ -126,6 +130,6 @@ A `result="failed"` with `final_length=0` does not imply a pipeline bug by itsel
 
 ## Cleanup
 
-- Restore `.env` to its original `SOURCE_PROVIDER`.
+- Restore `.env` to its original toggle settings.
 - `docker compose down` if you started a container.
 - Stop any leftover dev server with the kill command above.

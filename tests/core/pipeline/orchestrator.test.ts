@@ -383,6 +383,155 @@ describe("PipelineOrchestrator", () => {
     expect(result.report.finalLength).toBe(4);
     expect(result.report.returned).toBe("fetch");
   });
+
+  it("gates a step with runIf unmet", async () => {
+    let ran = false;
+    const gatedStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "gated",
+      type: "tracker",
+      async run(_ctx: PipelineContext): Promise<StepResult> {
+        ran = true;
+        return { status: "ok" };
+      }
+    };
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(
+          new FakeStep("source", {
+            status: "ok",
+            effects: { signals: { has_pdf: false } }
+          }),
+          5
+        ),
+        withMeta(gatedStep, 5, undefined, { runIf: "has_pdf" })
+      ]
+    });
+
+    const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(ran).toBe(false);
+    expect(result.report.steps[1]?.status).toBe("skipped");
+    expect(result.report.steps[1]?.reason).toBe("run_if_unmet");
+  });
+
+  it("gates a step with skipIf met", async () => {
+    let ran = false;
+    const gatedStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "gated",
+      type: "tracker",
+      async run(_ctx: PipelineContext): Promise<StepResult> {
+        ran = true;
+        return { status: "ok" };
+      }
+    };
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(
+          new FakeStep("source", {
+            status: "ok",
+            effects: { signals: { code_host: true } }
+          }),
+          5
+        ),
+        withMeta(gatedStep, 5, undefined, { skipIf: "code_host" })
+      ]
+    });
+
+    const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(ran).toBe(false);
+    expect(result.report.steps[1]?.status).toBe("skipped");
+    expect(result.report.steps[1]?.reason).toBe("skip_if_met");
+  });
+
+  it("runs normally when gate signals are absent or falsy", async () => {
+    let ran = false;
+    const gatedStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "gated",
+      type: "tracker",
+      async run(_ctx: PipelineContext): Promise<StepResult> {
+        ran = true;
+        return { status: "ok", effects: { body: textBody({ content: "hello" }) } };
+      }
+    };
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(
+          new FakeStep("source", {
+            status: "ok",
+            effects: { signals: { flag: false } }
+          }),
+          5
+        ),
+        withMeta(gatedStep, 5, undefined, { runIf: "flag", skipIf: "missing" })
+      ]
+    });
+
+    const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(ran).toBe(false);
+    expect(result.report.steps[1]?.status).toBe("skipped");
+    expect(result.report.steps[1]?.reason).toBe("run_if_unmet");
+  });
+
+  it("applies effects from a gated step's prior step before evaluating gate", async () => {
+    let ran = false;
+    const pdfStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "pdf_only",
+      type: "tracker",
+      async run(_ctx: PipelineContext): Promise<StepResult> {
+        ran = true;
+        return { status: "ok" };
+      }
+    };
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(
+          new FakeStep("classify", {
+            status: "ok",
+            effects: { signals: { is_pdf: true } }
+          }),
+          5
+        ),
+        withMeta(pdfStep, 5, undefined, { runIf: "is_pdf" })
+      ]
+    });
+
+    const result = await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(ran).toBe(true);
+    expect(result.report.steps[1]?.status).toBe("ok");
+  });
+
+  it("records a gated skip in outcomes visible to later steps", async () => {
+    const outcomes: string[] = [];
+    const gatedStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "gated",
+      type: "fake",
+      async run(): Promise<StepResult> {
+        return { status: "ok" };
+      }
+    };
+    const inspectorStep: PipelineStep & { readonly name: string; readonly type: string } = {
+      name: "inspector",
+      type: "fake",
+      async run(ctx: PipelineContext): Promise<StepResult> {
+        for (const o of ctx.outcomes) outcomes.push(`${o.name}=${o.status}:${o.reason ?? "-"}`);
+        return { status: "ok" };
+      }
+    };
+    const pipeline = makePipeline({
+      steps: [
+        withMeta(new FakeStep("classify", { status: "ok", effects: { signals: { skip_me: true } } }), 5),
+        withMeta(gatedStep, 5, undefined, { skipIf: "skip_me" }),
+        withMeta(inspectorStep, 5)
+      ]
+    });
+
+    await makeOrchestrator().run(pipeline, { url: "https://example.com/" });
+
+    expect(outcomes).toContain("gated=skipped:skip_if_met");
+  });
 });
 
 function makeOrchestrator(): PipelineOrchestrator {
@@ -392,7 +541,8 @@ function makeOrchestrator(): PipelineOrchestrator {
 function withMeta<T extends PipelineStep & { readonly name: string; readonly type: string }>(
   step: T,
   timeoutSeconds: number,
-  concurrencyGroup?: string
+  concurrencyGroup?: string,
+  overrides?: Partial<Pick<CompiledPipelineStep, "runIf" | "skipIf">>
 ): CompiledPipelineStep {
-  return { name: step.name, type: step.type, timeoutSeconds, concurrencyGroup, step };
+  return { name: step.name, type: step.type, timeoutSeconds, concurrencyGroup, ...overrides, step };
 }

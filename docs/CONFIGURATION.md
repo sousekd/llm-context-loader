@@ -53,27 +53,23 @@ fail startup.
 
 The placeholders below are grouped by the part of the pipeline they configure.
 
-### Source provider selection
-
-| Variable          | Default / behavior         | Purpose                                              |
-| ----------------- | -------------------------- | ---------------------------------------------------- |
-| `SOURCE_PROVIDER` | selected pipeline fallback | Optional source-provider override for `load-source`. |
-
-Leave `SOURCE_PROVIDER` empty to use the selected pipeline's fallback: `http-default` for `truncate`, `firecrawl-html` for `clean-deterministic` and `clean-combined`, and `firecrawl-markdown` for `clean-llm`. Set it only when intentionally overriding that choice.
-
 ### Source provider (Firecrawl)
 
-| Variable             | Default / behavior | Purpose                                                                                                            |
-| -------------------- | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when any Firecrawl-based provider is active (`firecrawl-markdown`, `firecrawl-html`). |
-| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                   |
+| Variable             | Default / behavior | Purpose                                                                                                                      |
+| -------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `FIRECRAWL_ENABLED`  | `false`            | Enable Firecrawl source loading (step `fetch_firecrawl`). When set to `true`, `FIRECRAWL_BASE_URL` must also be set.         |
+| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when an enabled step references a Firecrawl provider.                                           |
+| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                             |
+| `FIRECRAWL_OPTIONS`  | empty              | JSON object of Firecrawl scrape options. Opaque passthrough merged into the request body. See CUSTOMIZATION.md for examples. |
 
 ### Source provider (Docling)
 
-| Variable           | Default / behavior | Purpose                                                                                    |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------ |
-| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required only when a pipeline referencing `docling-ocr` is active. |
-| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                  |
+| Variable           | Default / behavior | Purpose                                                                                                                                      |
+| ------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOCLING_ENABLED`  | `false`            | Enable Docling source loading (step `fetch_docling`, gated by `runIf: binary_doc`). When set to `true`, `DOCLING_BASE_URL` must also be set. |
+| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required when an enabled step references `docling-default`.                                                          |
+| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                                                                    |
+| `DOCLING_OPTIONS`  | empty              | JSON object of Docling convert options. Opaque passthrough merged into the convert body. See CUSTOMIZATION.md for examples.                  |
 
 ### Content transformer (mdream)
 
@@ -91,24 +87,29 @@ Leave `SOURCE_PROVIDER` empty to use the selected pipeline's fallback: `http-def
 
 ### LLM provider (OpenAI-compatible)
 
-| Variable                   | Default / behavior | Purpose                                                                                                                     |
-| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required only when a pipeline referencing `llm-default` is active. |
-| `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                                                                  |
-| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required only when a pipeline referencing `llm-default` is active.               |
-| `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate.                                               |
-| `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.                                                       |
-| `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.                                                        |
+| Variable                   | Default / behavior | Purpose                                                                                                                                 |
+| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `LLM_CLEAN_ENABLED`        | `false`            | Enable the clean LLM pass (steps `clean_llm` + `verify_after_clean`). When `true`, `LLM_BASE_URL` and `LLM_MODEL` are required.         |
+| `LLM_SUMMARIZE_ENABLED`    | `false`            | Enable the summarize LLM pass (steps `summarize` + `verify_after_summarize`). When `true`, `LLM_BASE_URL` and `LLM_MODEL` are required. |
+| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required when an enabled step references `llm-default`.                        |
+| `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                                                                              |
+| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required when an enabled step references `llm-default`.                                      |
+| `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate.                                                           |
+| `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.                                                                   |
+| `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.                                                                    |
 
 ### Pipeline output and step thresholds
 
-| Variable                      | Default / behavior | Purpose                                                     |
-| ----------------------------- | ------------------ | ----------------------------------------------------------- |
-| `OUTPUT_TARGET_CHARS`         | `25000`            | Desired maximum characters returned by the active pipeline. |
-| `LOAD_SOURCE_TIMEOUT_SECONDS` | `20`               | Per-call timeout for the source-loading step.               |
-| `CLEAN_MIN_INPUT_CHARS`       | `1000`             | Minimum body characters before the clean LLM pass runs.     |
-| `CLEAN_TIMEOUT_SECONDS`       | `60`               | Per-call timeout for the clean LLM pass.                    |
-| `SUMMARIZE_TIMEOUT_SECONDS`   | `60`               | Per-call timeout for the summarize LLM pass.                |
+| Variable                        | Default / behavior | Purpose                                                                                                    |
+| ------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `OUTPUT_TARGET_CHARS`           | `25000`            | Desired maximum characters returned by the active pipeline.                                                |
+| `READABILITY_ENABLED`           | `true`             | Enable Readability HTML-to-article extraction (step `clean`). Local operation; no external service needed. |
+| `FETCH_TIMEOUT_SECONDS`         | `20`               | Per-call timeout for the native HTTP source-loading step.                                                  |
+| `FIRECRAWL_TIMEOUT_SECONDS`     | `20`               | Per-call timeout for the Firecrawl source-loading step.                                                    |
+| `DOCLING_TIMEOUT_SECONDS`       | `60`               | Per-call timeout for the Docling OCR source-loading step.                                                  |
+| `LLM_CLEAN_MIN_INPUT_CHARS`     | `1000`             | Minimum body characters before the clean LLM pass runs.                                                    |
+| `LLM_CLEAN_TIMEOUT_SECONDS`     | `60`               | Per-call timeout for the clean LLM pass.                                                                   |
+| `LLM_SUMMARIZE_TIMEOUT_SECONDS` | `60`               | Per-call timeout for the summarize LLM pass.                                                               |
 
 ### Concurrency
 
@@ -147,6 +148,8 @@ YAML substitution happens before schema validation.
 Substitution applies recursively to YAML string values. Non-string YAML values are left as YAML values and then parsed by schemas.
 
 Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
+
+Some opaque record fields (`extraBody`, Docling `options`, Firecrawl `options`, future providers) also accept a whole JSON-string blob from a single env var — see [Opaque Passthrough Fields](CUSTOMIZATION.md#opaque-passthrough-fields) in customization for details.
 
 Docker Compose performs its own interpolation before the container starts. The shipped Compose files pass all provider variables through with empty defaults (`${VAR:-}`) so the container always starts and the Node process validates only the active pipeline's providers at startup.
 

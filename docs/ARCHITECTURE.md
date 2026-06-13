@@ -70,7 +70,7 @@ The current built-ins are:
 - Source providers: `http`, `firecrawl`, `docling`.
 - Content transformers: `readability`, `mdream`.
 - LLM providers: `openai-chat`.
-- Pipeline steps: `load-source`, `llm-pass`, `transform`, `truncate`, `capture-urls`, `verify-urls`.
+- Pipeline steps: `classify-url`, `load-source`, `llm-pass`, `transform`, `truncate`, `capture-urls`, `verify-urls`.
 - Output renderers: `debug-xml`, `passthrough`.
 
 ## Dependency Boundaries
@@ -119,7 +119,7 @@ Key pieces:
 - `StepResult` carries `status: "ok" | "skipped" | "degraded" | "failed"`, optional `reason`, `effects`, and `diagnostics`. Diagnostics are observability-only: they surface in the persisted `StepReport` and in renderers, but are never visible to later steps.
 - `StepOutcome` (`src/contracts/pipeline/report.ts`) is the compact, semantic view later steps see via `PipelineContext.outcomes`; inter-step coordination uses `signals` and `artifacts`, not diagnostics. `StepReport` extends it with timing and a mirrored diagnostics payload.
 - `applyStepEffects` applies effects on `ok` or `degraded` status (in body, signal, artifact order); `skipped` and `failed` results never apply effects. A `degraded` step may still carry effects, for example a quality gate rolling the body back to its previous version.
-- `PipelineOrchestrator` runs one compiled pipeline for one URL, applies per-step timeouts, acquires concurrency-group limiters, records reports, and returns detached signal/artifact snapshots.
+- `PipelineOrchestrator` runs one compiled pipeline for one URL, evaluates `runIf`/`skipIf` gates before each step (recording `skipped` with reason without running the step when gated), applies per-step timeouts, acquires concurrency-group limiters, records reports, and returns detached signal/artifact snapshots.
 - `PipelineRunner` (`src/core/pipeline/runner.ts`) wraps the orchestrator and applies the pipeline's configured renderer, including a synthetic failure report for adapter-level per-URL failures.
 - `OutputRenderer` (`src/contracts/extensions/output-renderer.ts`) is the runtime rendering port.
 

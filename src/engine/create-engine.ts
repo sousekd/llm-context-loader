@@ -98,12 +98,14 @@ function pipelineInfos(config: EngineConfig): ReadonlyArray<PipelineInfo> {
     .map(([name, pipeline]) => ({
       name,
       outputRenderer: pipeline.outputRenderer,
-      steps: pipeline.steps.map(step => ({
-        name: step.name,
-        type: step.type,
-        timeoutSeconds: step.timeoutSeconds,
-        concurrencyGroup: step.concurrencyGroup
-      }))
+      steps: pipeline.steps
+        .filter(step => step.enabled !== false)
+        .map(step => ({
+          name: step.name,
+          type: step.type,
+          timeoutSeconds: step.timeoutSeconds,
+          concurrencyGroup: step.concurrencyGroup
+        }))
     }));
 }
 
