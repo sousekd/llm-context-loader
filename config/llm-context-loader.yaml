@@ -40,16 +40,14 @@ sourceProviders:
       baseUrl: ${FIRECRAWL_BASE_URL:-}
       apiKey: ${FIRECRAWL_API_KEY:-}
       output: rawHtml
-      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
+      options: ${FIRECRAWL_OPTIONS:-}
   firecrawl-markdown:
     type: firecrawl
     config:
       baseUrl: ${FIRECRAWL_BASE_URL:-}
       apiKey: ${FIRECRAWL_API_KEY:-}
       output: markdown
-      onlyMainContent: true
-      stripBase64Images: true
-      parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
+      options: ${FIRECRAWL_OPTIONS:-}
   docling-default:
     type: docling
     config:

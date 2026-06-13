@@ -31,7 +31,7 @@ const schema = z.object({
 });
 ```
 
-Use `emptyStringAsUndefined` around numeric fields with defaults or `.optional()` so blank env values do not silently become `0`. Use `booleanStringAsBooleanOrUndefined` instead of `z.coerce.boolean()`; JavaScript truthiness would parse `"false"` as `true`. Leave string secrets and tokens as strings when blank is meaningful. Leave opaque payloads such as provider-specific `extraBody` as YAML values; do not infer nested scalar types unless the field has a real schema.
+Use `emptyStringAsUndefined` around numeric fields with defaults or `.optional()` so blank env values do not silently become `0`. Use `booleanStringAsBooleanOrUndefined` instead of `z.coerce.boolean()`; JavaScript truthiness would parse `"false"` as `true`. Leave string secrets and tokens as strings when blank is meaningful. Use `jsonStringAsObjectOrUndefined` for opaque record fields such as provider-specific `extraBody` or `options`, so they support inline YAML objects and single env-var JSON blobs without inferring nested scalar types.
 
 ## Construction Dependencies
 

@@ -55,11 +55,12 @@ The placeholders below are grouped by the part of the pipeline they configure.
 
 ### Source provider (Firecrawl)
 
-| Variable             | Default / behavior | Purpose                                                                                                              |
-| -------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `FIRECRAWL_ENABLED`  | `false`            | Enable Firecrawl source loading (step `fetch_firecrawl`). When set to `true`, `FIRECRAWL_BASE_URL` must also be set. |
-| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when an enabled step references a Firecrawl provider.                                   |
-| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                     |
+| Variable             | Default / behavior | Purpose                                                                                                                      |
+| -------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `FIRECRAWL_ENABLED`  | `false`            | Enable Firecrawl source loading (step `fetch_firecrawl`). When set to `true`, `FIRECRAWL_BASE_URL` must also be set.         |
+| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when an enabled step references a Firecrawl provider.                                           |
+| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                             |
+| `FIRECRAWL_OPTIONS`  | empty              | JSON object of Firecrawl scrape options. Opaque passthrough merged into the request body. See CUSTOMIZATION.md for examples. |
 
 ### Source provider (Docling)
 
@@ -148,7 +149,7 @@ Substitution applies recursively to YAML string values. Non-string YAML values a
 
 Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
 
-Some opaque record fields (`extraBody`, Docling `options`, future providers) also accept a whole JSON-string blob from a single env var — see [Opaque Passthrough Fields](CUSTOMIZATION.md#opaque-passthrough-fields) in customization for details.
+Some opaque record fields (`extraBody`, Docling `options`, Firecrawl `options`, future providers) also accept a whole JSON-string blob from a single env var — see [Opaque Passthrough Fields](CUSTOMIZATION.md#opaque-passthrough-fields) in customization for details.
 
 Docker Compose performs its own interpolation before the container starts. The shipped Compose files pass all provider variables through with empty defaults (`${VAR:-}`) so the container always starts and the Node process validates only the active pipeline's providers at startup.
 

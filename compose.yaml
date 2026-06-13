@@ -31,7 +31,7 @@ x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML l
   # Source provider.
   FIRECRAWL_BASE_URL: "${FIRECRAWL_BASE_URL:-}"
   FIRECRAWL_API_KEY: "${FIRECRAWL_API_KEY:-}"
-  FIRECRAWL_PARSE_PDF: "${FIRECRAWL_PARSE_PDF:-}"
+  FIRECRAWL_OPTIONS: "${FIRECRAWL_OPTIONS:-}"
   DOCLING_BASE_URL: "${DOCLING_BASE_URL:-}"
   DOCLING_API_KEY: "${DOCLING_API_KEY:-}"
   DOCLING_OPTIONS: "${DOCLING_OPTIONS:-}"

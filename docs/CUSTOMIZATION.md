@@ -186,27 +186,29 @@ config:
   baseUrl: ${FIRECRAWL_BASE_URL}
   apiKey: ${FIRECRAWL_API_KEY:-}
   output: markdown
-  onlyMainContent: true
-  stripBase64Images: true
-  parsePdf: true
+  options: ${FIRECRAWL_OPTIONS:-}
 ```
 
-| Knob                | Values                            | Default    | Purpose                                                                                                                                                                                                                                                                           |
-| ------------------- | --------------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `output`            | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is "raw" — full JS-rendered DOM for web pages, viewer `<img>` wrapper for images, and bare extracted text for PDFs (use for Readability testing).                                                  |
-| `onlyMainContent`   | bool                              | `true`     | When enabled Firecrawl extracts the main page content and strips headers, nav, footers. No-op for `rawHtml`.                                                                                                                                                                      |
-| `stripBase64Images` | bool                              | `true`     | Maps to `removeBase64Images` — replaces inline data URIs with short placeholders in markdown output. No-op for `html`/`rawHtml`.                                                                                                                                                  |
-| `parsePdf`          | bool                              | `true`     | Configurable via `FIRECRAWL_PARSE_PDF`. When `true`, Firecrawl parses PDF files to extracted text. When `false`, raw PDF bytes are returned as a binary body (`application/pdf`) — the pipeline fails with `unconverted_binary` until a PDF converter (e.g. Docling) is wired up. |
+| Knob      | Values                            | Default    | Purpose                                                                                                                                                                                                                          |
+| --------- | --------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `output`  | `markdown` \| `html` \| `rawHtml` | `markdown` | Which format Firecrawl returns. `html` is cleaned main-content HTML. `rawHtml` is "raw" — full JS-rendered DOM for web pages, viewer `<img>` wrapper for images, and bare extracted text for PDFs (use for Readability testing). |
+| `options` | object                            | `{}`       | Opaque passthrough merged into the Firecrawl `/v2/scrape` body. See [Opaque Passthrough Fields](#opaque-passthrough-fields).                                                                                                     |
+
+`output` stays typed because the provider depends on it: it selects the requested format, decides which response field to read (`data.markdown`, `data.html`, `data.rawHtml`), and sets the returned media type. The `formats` field in the request body is provider-managed and cannot be overridden through `options`.
+
+**Opaque `options`.** Every other Firecrawl scrape knob flows through `options` verbatim — `onlyMainContent`, `removeBase64Images`, `waitFor`, `timeout`, `maxAge`, `includeTags`, `excludeTags`, `blockAds`, `proxy`, `location`, `headers`, `mobile`, and all others. Omitted knobs use Firecrawl's server defaults (`onlyMainContent:true`, `removeBase64Images:true`, `parsers:["pdf"]`, etc.), so an empty `options` produces the same behavior as the previous explicit defaults.
+
+**PDF passthrough (raw bytes).** To return raw PDF bytes instead of parsed text (e.g. for Docling), set `parsers: []` in options: `options: '{"parsers":[]}'`. The provider detects the passthrough by base64-decoding the content and verifying the `%PDF` magic header, so the binary response is truthful regardless of the source's `Content-Type` header.
 
 The provider calls `/v2/scrape`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. Title is read from `data.metadata.title` (format-independent). The media type of returned bodies is derived truthfully:
 
-| `output` | HTML / docx source | image source    | PDF source (parsePdf:true) |
-| -------- | ------------------ | --------------- | -------------------------- |
-| markdown | `text/markdown`    | `text/markdown` | `text/markdown`            |
-| html     | `text/html`        | `text/html`     | `text/html` (wrapped)      |
-| rawHtml  | `text/html`        | `text/html`     | **`text/plain`**           |
+| `output` | HTML / docx source | image source    | PDF source (parsers default `["pdf"]`) |
+| -------- | ------------------ | --------------- | -------------------------------------- |
+| markdown | `text/markdown`    | `text/markdown` | `text/markdown`                        |
+| html     | `text/html`        | `text/html`     | `text/html` (wrapped)                  |
+| rawHtml  | `text/html`        | `text/html`     | **`text/plain`**                       |
 
-`rawHtml` is "raw": for web pages and images it returns HTML, but for PDFs it returns bare extracted text. The provider detects this by looking at whether the content starts with an HTML tag — if not, it labels it `text/plain` so downstream transformers (which gate on `isHtmlMediaType`) skip it correctly. When `parsePdf:false`, PDFs are returned as binary (`application/pdf`) from base64-decoded raw bytes supplied by Firecrawl's empty-`parsers` mode.
+`rawHtml` is "raw": for web pages and images it returns HTML, but for PDFs it returns bare extracted text. The provider detects this by looking at whether the content starts with an HTML tag — if not, it labels it `text/plain` so downstream transformers (which gate on `isHtmlMediaType`) skip it correctly.
 
 ### `docling`
 
@@ -310,7 +312,7 @@ Context-fit fields are optional and own the char-to-token conversion:
 
 ## Opaque Passthrough Fields
 
-Several providers expose an opaque record field that is merged verbatim into the outgoing request body — `extraBody` (openai-chat), `options` (docling), and future source providers. These records support **three authoring modes**:
+Several providers expose an opaque record field that is merged verbatim into the outgoing request body — `extraBody` (openai-chat), `options` (docling), `options` (firecrawl), and future source providers. These records support **three authoring modes**:
 
 | Mode                       | Example                                            | Behavior                                                                                                |
 | -------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |

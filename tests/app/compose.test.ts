@@ -74,7 +74,7 @@ describe("composeApp", () => {
     ).rejects.toThrow("Duplicate step name");
 
     const unknownField = await writeConfigFixture(
-      defaultYaml().replace("      stripBase64Images: true", "      stripBase64Images: true\n      mystery: true")
+      defaultYaml().replace("      output: markdown", "      output: markdown\n      mystery: true")
     );
     await expect(
       composeApp({
@@ -119,8 +119,6 @@ describe("composeApp", () => {
   it("coerces env-substituted config scalars through schema parsers", async () => {
     const fixture = await writeConfigFixture(
       defaultYaml()
-        .replace("onlyMainContent: true", "onlyMainContent: ${FIRECRAWL_ONLY_MAIN:-}")
-        .replace("stripBase64Images: true", "stripBase64Images: ${FIRECRAWL_STRIP_IMAGES:-}")
         .replace("includeSkipped: true", "includeSkipped: ${DEBUG_XML_INCLUDE_SKIPPED:-}")
         .replace(
           "        config:\n          provider: llm-default",
@@ -134,8 +132,7 @@ describe("composeApp", () => {
       envConfig: loadEnvConfig({ CONFIG_FILE: fixture.configPath }),
       env: {
         FIRECRAWL_BASE_URL: "https://firecrawl.example",
-        FIRECRAWL_ONLY_MAIN: "false",
-        FIRECRAWL_STRIP_IMAGES: "",
+        FIRECRAWL_OPTIONS: '{"onlyMainContent":false}',
         LLM_BASE_URL: "https://llm.example/v1",
         LLM_MODEL: "model",
         DEBUG_XML_INCLUDE_SKIPPED: "false",
@@ -162,7 +159,7 @@ describe("composeApp", () => {
       .require("firecrawl-markdown")
       .provider.load("https://example.com", { signal: new AbortController().signal });
 
-    expect(firecrawlRequestBody).toMatchObject({ onlyMainContent: false, removeBase64Images: true });
+    expect(firecrawlRequestBody).toMatchObject({ onlyMainContent: false });
   });
 
   it("rejects unknown registry references and invalid diagnostic names", async () => {
@@ -249,9 +246,7 @@ function defaultYaml(): string {
       baseUrl: \${FIRECRAWL_BASE_URL}
       apiKey: \${FIRECRAWL_API_KEY:-}
       output: markdown
-      onlyMainContent: true
-      stripBase64Images: true
-      parsePdf: true
+      options: \${FIRECRAWL_OPTIONS:-}
 llmProviders:
   llm-default:
     type: openai-chat
