@@ -63,11 +63,12 @@ The placeholders below are grouped by the part of the pipeline they configure.
 
 ### Source provider (Docling)
 
-| Variable           | Default / behavior | Purpose                                                                                                                                          |
-| ------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `DOCLING_ENABLED`  | `false`            | Enable Docling OCR source loading (step `fetch_docling`, gated by `runIf: binary_doc`). When set to `true`, `DOCLING_BASE_URL` must also be set. |
-| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required when an enabled step references `docling-ocr`.                                                                  |
-| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                                                                        |
+| Variable           | Default / behavior | Purpose                                                                                                                                      |
+| ------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DOCLING_ENABLED`  | `false`            | Enable Docling source loading (step `fetch_docling`, gated by `runIf: binary_doc`). When set to `true`, `DOCLING_BASE_URL` must also be set. |
+| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required when an enabled step references `docling-default`.                                                          |
+| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                                                                    |
+| `DOCLING_OPTIONS`  | empty              | JSON object of Docling convert options. Opaque passthrough merged into the convert body. See CUSTOMIZATION.md for examples.                  |
 
 ### Content transformer (mdream)
 
@@ -146,6 +147,8 @@ YAML substitution happens before schema validation.
 Substitution applies recursively to YAML string values. Non-string YAML values are left as YAML values and then parsed by schemas.
 
 Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
+
+Some opaque record fields (`extraBody`, Docling `options`, future providers) also accept a whole JSON-string blob from a single env var — see [Opaque Passthrough Fields](CUSTOMIZATION.md#opaque-passthrough-fields) in customization for details.
 
 Docker Compose performs its own interpolation before the container starts. The shipped Compose files pass all provider variables through with empty defaults (`${VAR:-}`) so the container always starts and the Node process validates only the active pipeline's providers at startup.
 

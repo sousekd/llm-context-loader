@@ -34,4 +34,41 @@ describe("parseOpenAiChatConfig", () => {
       parseOpenAiChatConfig({ baseUrl: "https://llm.example/v1", model: "test-model", contextTokens: "0" })
     ).toThrow();
   });
+
+  it("passes through inline extraBody object unmodified", () => {
+    const config = parseOpenAiChatConfig({
+      baseUrl: "https://llm.example/v1",
+      model: "test-model",
+      extraBody: { temperature: 0.7, top_p: 0.9 }
+    });
+    expect(config.extraBody).toEqual({ temperature: 0.7, top_p: 0.9 });
+  });
+
+  it("parses a JSON-string blob in extraBody from a single env var", () => {
+    const config = parseOpenAiChatConfig({
+      baseUrl: "https://llm.example/v1",
+      model: "test-model",
+      extraBody: '{"temperature":0.7,"top_p":0.9}'
+    });
+    expect(config.extraBody).toEqual({ temperature: 0.7, top_p: 0.9 });
+  });
+
+  it("coerces a blank extraBody env var to empty object", () => {
+    const config = parseOpenAiChatConfig({
+      baseUrl: "https://llm.example/v1",
+      model: "test-model",
+      extraBody: ""
+    });
+    expect(config.extraBody).toEqual({});
+  });
+
+  it("rejects invalid JSON in extraBody", () => {
+    expect(() =>
+      parseOpenAiChatConfig({
+        baseUrl: "https://llm.example/v1",
+        model: "test-model",
+        extraBody: "{bad"
+      })
+    ).toThrow();
+  });
 });

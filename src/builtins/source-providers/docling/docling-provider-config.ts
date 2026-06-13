@@ -1,21 +1,22 @@
 /**
  * Parses YAML configuration for the built-in Docling source provider.
  *
- * Environment substitution runs before this schema, so boolean fields use
- * shared preprocessors to treat blank placeholders as omitted values.
+ * Environment substitution runs before this schema, so blank fields use shared
+ * preprocessors. `output` stays typed because it drives the requested formats,
+ * the response field read, and the returned media type. Remaining Docling
+ * convert knobs flow through the shared opaque-record preprocessor.
  */
 
 import { z } from "zod";
 
-import { booleanStringAsBooleanOrUndefined, emptyStringAsUndefined } from "../../../shared/config-coercion.js";
+import { emptyStringAsUndefined, jsonStringAsObjectOrUndefined } from "../../../shared/config-coercion.js";
 
 const doclingConfigSchema = z
   .object({
     baseUrl: z.string().min(1, "docling baseUrl is required").url("docling baseUrl must be a valid URL"),
     apiKey: z.string().default(""),
     output: z.preprocess(emptyStringAsUndefined, z.enum(["markdown", "html"]).default("markdown")),
-    doOcr: z.preprocess(booleanStringAsBooleanOrUndefined, z.boolean().default(true)),
-    tableMode: z.enum(["fast", "accurate"]).default("accurate")
+    options: z.preprocess(jsonStringAsObjectOrUndefined, z.record(z.unknown()).default({}))
   })
   .strict();
 

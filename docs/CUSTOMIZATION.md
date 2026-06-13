@@ -215,17 +215,19 @@ config:
   baseUrl: ${DOCLING_BASE_URL}
   apiKey: ${DOCLING_API_KEY:-}
   output: markdown
-  doOcr: true
-  tableMode: accurate
+  options: ${DOCLING_OPTIONS:-}
 ```
 
-| Knob        | Values               | Default    | Purpose                                                                                                                                                |
-| ----------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `output`    | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
-| `doOcr`     | bool                 | `true`     | Run OCR on scanned documents and images within PDFs.                                                                                                   |
-| `tableMode` | `fast` \| `accurate` | `accurate` | Table extraction quality. `accurate` is slower but better for complex layouts.                                                                         |
+| Knob      | Values               | Default    | Purpose                                                                                                                                                |
+| --------- | -------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `output`  | `markdown` \| `html` | `markdown` | Which format Docling returns. `html` is the Docling HTML serializer output (polished semantic HTML with inline CSS — does NOT provide raw/rough HTML). |
+| `options` | object               | `{}`       | Opaque passthrough merged into the Docling convert `options` body. See [Opaque Passthrough Fields](#opaque-passthrough-fields).                        |
 
-The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name` (the JSON format is always requested internally regardless of the `output` setting). Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
+`output` stays typed because the provider depends on it: it selects the requested formats, decides whether to read `md_content` or `html_content`, and sets the returned media type. The JSON format is always requested internally (for the title from `document.json_content.name`), so `to_formats` is provider-managed and cannot be overridden through `options`.
+
+**Opaque `options`.** Every other Docling convert knob flows through `options` verbatim. The provider-managed `to_formats` value is applied after `options` and cannot be overridden, because the provider depends on it to read the response correctly.
+
+The provider calls `POST /v1/convert/source`. Title is read from `document.json_content.name`. Upstream HTTP, parse, empty, and network failures are converted to degradable upstream errors. `output: markdown` returns `text/markdown`; `output: html` returns `text/html`.
 
 ## Content Transformers
 
@@ -296,7 +298,7 @@ config:
 
 The provider joins `baseUrl` with `/chat/completions`; for OpenAI-compatible servers this usually means configuring a `/v1` base URL. It sends `model` and `messages`, using only `system` and `user` roles. `extraBody` is spread into the request body after the standard fields, so it can provide sampler or server-specific parameters.
 
-Values inside `extraBody` are opaque YAML values. YAML booleans and numbers stay typed, but env placeholders inside `extraBody` substitute as strings.
+`extraBody` is an opaque passthrough field; see [Opaque Passthrough Fields](#opaque-passthrough-fields).
 
 One provider instance corresponds to one model. To use several models against the same server, declare additional `openai-chat` instances with different names and `model` values.
 
@@ -305,6 +307,26 @@ Context-fit fields are optional and own the char-to-token conversion:
 - `contextTokens` — model context window. Leaving it empty disables the context-fit gate, and the provider always reports prompts as fitting.
 - `charsPerToken` — conservative chars-per-token estimator. Lower values reject more aggressively. Default `3.5`. This is a character-based approximation rather than a real tokenizer.
 - `safetyMarginTokens` — extra tokens reserved for chat-template framing or estimator drift. Default `0` in the provider schema; the bundled YAML defaults it to `128` via `LLM_SAFETY_MARGIN_TOKENS`. Increase if the model still rejects prompts the gate accepts.
+
+## Opaque Passthrough Fields
+
+Several providers expose an opaque record field that is merged verbatim into the outgoing request body — `extraBody` (openai-chat), `options` (docling), and future source providers. These records support **three authoring modes**:
+
+| Mode                       | Example                                            | Behavior                                                                                                |
+| -------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Inline YAML object         | `options:\n  do_ocr: true\n  table_mode: accurate` | Typed YAML values (booleans stay booleans, etc.)                                                        |
+| Single env var (JSON blob) | `options: ${DOCLING_OPTIONS:-}`                    | The env value is `JSON.parse`'d into an object; blank/unset → `{}`                                      |
+| Mixed (not recommended)    | `options:\n  do_ocr: ${ENV_BOOL:-true}`            | Env placeholders substitute as **strings**, not their original type. Prefer one of the two modes above. |
+
+The single-env-var mode is convenient when you have many keys or inconsistent per-deployment values. Your env file holds the entire object:
+
+```dotenv
+DOCLING_OPTIONS='{"do_ocr":true,"table_mode":"accurate"}'
+```
+
+The JSON blob is parsed once by the shared `jsonStringAsObjectOrUndefined` preprocessor before the schema validates it as a record. Nested values (`picture_description_api`) are real objects — unlike Open WebUI's approach, there is **no double-encoding**.
+
+All opaque fields use the same preprocessor, so the three authoring modes and their limitation (env placeholders inside inline YAML objects substitute as strings) apply consistently everywhere.
 
 ## Pipelines
 
@@ -473,7 +495,7 @@ The config ships two pipelines, selected via `DEFAULT_PIPELINE` (defaults to `fu
 ### `full` (default)
 
 ```text
-classify-url -> load-source(docling-ocr)* -> load-source(firecrawl-html)* -> load-source(http-default) -> transform(clean via readability)* -> transform(convert via mdream) -> capture-urls -> llm-pass(clean_llm)* -> verify-urls(rollback)* -> llm-pass(summarize)* -> verify-urls(report)* -> truncate
+classify-url -> load-source(docling-default)* -> load-source(firecrawl-html)* -> load-source(http-default) -> transform(clean via readability)* -> transform(convert via mdream) -> capture-urls -> llm-pass(clean_llm)* -> verify-urls(rollback)* -> llm-pass(summarize)* -> verify-urls(report)* -> truncate
   * toggleable via env var (see below)
 ```
 

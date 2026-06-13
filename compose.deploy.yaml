@@ -34,6 +34,7 @@ x-llmc-environment: &llmc-environment # Bootstrap environment read before YAML l
   FIRECRAWL_PARSE_PDF: "${FIRECRAWL_PARSE_PDF:-}"
   DOCLING_BASE_URL: "${DOCLING_BASE_URL:-}"
   DOCLING_API_KEY: "${DOCLING_API_KEY:-}"
+  DOCLING_OPTIONS: "${DOCLING_OPTIONS:-}"
 
   # Content transformers.
   MDREAM_CLEAN: "${MDREAM_CLEAN:-true}"

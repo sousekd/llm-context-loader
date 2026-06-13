@@ -50,14 +50,13 @@ sourceProviders:
       onlyMainContent: true
       stripBase64Images: true
       parsePdf: ${FIRECRAWL_PARSE_PDF:-true}
-  docling-ocr:
+  docling-default:
     type: docling
     config:
       baseUrl: ${DOCLING_BASE_URL:-}
       apiKey: ${DOCLING_API_KEY:-}
       output: markdown
-      doOcr: true
-      tableMode: accurate
+      options: ${DOCLING_OPTIONS:-}
 
 # Content transformers rewrite the body between representations (e.g. HTML to markdown).
 contentTransformers:
@@ -115,7 +114,7 @@ pipelines:
         runIf: binary_doc
         timeoutSeconds: ${DOCLING_TIMEOUT_SECONDS:-60}
         config:
-          provider: docling-ocr
+          provider: docling-default
       - type: load-source
         name: fetch_firecrawl
         concurrencyGroup: source

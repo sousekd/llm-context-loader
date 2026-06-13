@@ -20,3 +20,18 @@ export function booleanStringAsBooleanOrUndefined(value: unknown): unknown {
   if (normalized === "false") return false;
   return value;
 }
+
+/** Parses a JSON string into an object, for opaque record fields that accept both
+ *  an inline YAML object and a JSON-string blob from an env var.
+ *  Non-strings pass through (inline object). Blank strings become undefined (empty
+ *  env var / default). Invalid JSON is returned raw so the schema reports the error. */
+export function jsonStringAsObjectOrUndefined(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const trimmed = value.trim();
+  if (trimmed === "") return undefined;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
