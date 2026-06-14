@@ -13,7 +13,7 @@ Implemented today:
 
 - `POST /` for Open WebUI's external web-loader contract.
 - `GET /r/<url>` and `GET /r?url=<url>` for limited Jina Reader-style URL-to-markdown compatibility.
-- Firecrawl and Docling source providers.
+- Native HTTP, Firecrawl, and Docling source providers.
 - Deterministic content transformers: Readability (article extraction) and mdream (HTML → markdown).
 - Optional LLM clean stage, optional LLM summarize stage, final truncation, and XML diagnostic footer.
 - YAML-driven configuration for pipelines, providers, content transformers, output renderers, and HTTP adapters.

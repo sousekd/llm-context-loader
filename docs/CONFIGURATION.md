@@ -1,23 +1,37 @@
 # Configuration
 
-This guide covers running and tuning the shipped configuration without redesigning the YAML pipeline. For changing pipeline structure, providers, output renderers, steps, or templates, see [CUSTOMIZATION.md](CUSTOMIZATION.md).
+This is the operator guide for running the shipped LLM Context Loader service. It covers environment variables, the default YAML, optional external services, Docker networking, authentication, and startup troubleshooting.
 
-Configuration has two layers:
+For changing pipeline structure, adding providers, or editing step wiring, use [CUSTOMIZATION.md](CUSTOMIZATION.md).
 
-1. Bootstrap environment variables read directly by the Node process before YAML loading.
+## Configuration Layers
+
+There are two layers:
+
+1. Bootstrap environment variables parsed before YAML loading.
 2. Environment placeholders inside [config/llm-context-loader.yaml](../config/llm-context-loader.yaml).
 
-For normal operation, copy [.env.example](../.env.example) to `.env`, then replace the provider placeholders with endpoints reachable from the process that will run the service. `.env` is ignored by git and is the right place for local LAN addresses and secrets.
+For normal operation, copy [.env.example](../.env.example) to `.env` and edit values there. The `.env` file is ignored by git and is the right place for local endpoints, model names, concurrency, and tokens.
 
-The Compose files read `.env` for interpolation. Running `docker compose config` prints the expanded values, so it can show local endpoints even though the tracked Compose files only contain variable references.
+```bash
+cp .env.example .env
+npm run dev
+```
 
-## Bootstrap Environment
+PowerShell:
 
-These variables are parsed by `src/config/env-config.ts`.
+```powershell
+Copy-Item .env.example .env
+npm run dev
+```
+
+## Bootstrap Variables
+
+These are read directly by the Node process:
 
 | Variable      | Default                          | Purpose                                            |
 | ------------- | -------------------------------- | -------------------------------------------------- |
-| `CONFIG_FILE` | `config/llm-context-loader.yaml` | YAML configuration file loaded at startup.         |
+| `CONFIG_FILE` | `config/llm-context-loader.yaml` | YAML file loaded at startup.                       |
 | `HOST`        | `0.0.0.0`                        | HTTP bind address.                                 |
 | `PORT`        | `3010`                           | HTTP listen port.                                  |
 | `LOG_LEVEL`   | `info`                           | pino log level.                                    |
@@ -25,158 +39,173 @@ These variables are parsed by `src/config/env-config.ts`.
 
 Invalid bootstrap values stop startup with a configuration error.
 
-## Compose-Only Variables
+## Choosing The Active Pipeline
 
-These are used by Compose files and ignored by the Node app.
+The default YAML ships two pipelines:
 
-| Variable           | Used by                                       | Purpose                                                  |
-| ------------------ | --------------------------------------------- | -------------------------------------------------------- |
-| `LLMC_LOCAL_IMAGE` | [compose.yaml](../compose.yaml)               | Local image tag for builds from the checkout.            |
-| `LLMC_IMAGE_TAG`   | [compose.deploy.yaml](../compose.deploy.yaml) | Required GHCR image tag for published-image deployments. |
+| Pipeline | Purpose                                                                                                                                             |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `full`   | Main pipeline. Supports optional Docling, Firecrawl, Readability, LLM clean/summarize passes, URL verification, truncation, and renderer selection. |
+| `smoke`  | Testing/debugging pipeline with native HTTP fetch, aggressive mdream conversion, and truncation.                                                    |
 
-## Script-Only Variables
+Select the active pipeline with:
 
-These are consumed by helper scripts and ignored by the Node app.
+```dotenv
+DEFAULT_PIPELINE=full
+```
 
-| Variable      | Used by                                        | Purpose                                      |
-| ------------- | ---------------------------------------------- | -------------------------------------------- |
-| `LOADER_BASE` | `scripts/smoke-*.ps1`, `scripts/inspect-*.ps1` | Base URL of a running LLM Context Loader.    |
-| `SEARX_BASE`  | `scripts/gather-urls.ps1`                      | Base URL of a SearXNG instance for URL seed. |
+Both shipped HTTP adapters use `DEFAULT_PIPELINE`, so changing it switches both Open WebUI and Jina-style routes together.
 
-## Default YAML Placeholders
+## Optional External Services
 
-The default YAML file uses environment substitution for provider URLs, tokens, concurrency, timeouts, and renderer selection. Most of these values are shown in [.env.example](../.env.example) and passed through the Compose files.
+The shipped `full` pipeline can run with external services disabled. Enable only the pieces you want.
 
-Validation is lazy: the service validates and constructs only the providers and pipelines that
-are reachable from the active configuration. An unused provider with missing env vars will not
-fail startup.
+### Firecrawl
 
-The placeholders below are grouped by the part of the pipeline they configure.
+Firecrawl is an optional source provider for page loading.
 
-### Source provider (Firecrawl)
+```dotenv
+FIRECRAWL_ENABLED=true
+FIRECRAWL_BASE_URL=http://firecrawl.example:3002
+FIRECRAWL_API_KEY=
+FIRECRAWL_OPTIONS=
+```
 
-| Variable             | Default / behavior | Purpose                                                                                                                      |
-| -------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `FIRECRAWL_ENABLED`  | `false`            | Enable Firecrawl source loading (step `fetch_firecrawl`). When set to `true`, `FIRECRAWL_BASE_URL` must also be set.         |
-| `FIRECRAWL_BASE_URL` | empty              | Firecrawl base URL. Required when an enabled step references a Firecrawl provider.                                           |
-| `FIRECRAWL_API_KEY`  | empty              | Optional Firecrawl bearer token.                                                                                             |
-| `FIRECRAWL_OPTIONS`  | empty              | JSON object of Firecrawl scrape options. Opaque passthrough merged into the request body. See CUSTOMIZATION.md for examples. |
+`FIRECRAWL_OPTIONS` accepts a JSON object string passed through to Firecrawl scrape options.
 
-### Source provider (Docling)
+### Docling
 
-| Variable           | Default / behavior | Purpose                                                                                                                                      |
-| ------------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DOCLING_ENABLED`  | `false`            | Enable Docling source loading (step `fetch_docling`, gated by `runIf: binary_doc`). When set to `true`, `DOCLING_BASE_URL` must also be set. |
-| `DOCLING_BASE_URL` | empty              | Docling Serve base URL. Required when an enabled step references `docling-default`.                                                          |
-| `DOCLING_API_KEY`  | empty              | Optional Docling API key.                                                                                                                    |
-| `DOCLING_OPTIONS`  | empty              | JSON object of Docling convert options. Opaque passthrough merged into the convert body. See CUSTOMIZATION.md for examples.                  |
+Docling is an optional source provider for binary documents. In the shipped pipeline it runs only for URLs classified as binary document URLs.
 
-### Content transformer (mdream)
+```dotenv
+DOCLING_ENABLED=true
+DOCLING_BASE_URL=http://docling.example:5001
+DOCLING_API_KEY=
+DOCLING_OPTIONS=
+```
 
-| Variable       | Default / behavior | Purpose                                                                                                              |
-| -------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| `MDREAM_CLEAN` | `true`             | Post-conversion link and whitespace cleanup for `mdream-convert`. Ignored when `minimal=true` (`mdream-aggressive`). |
+`DOCLING_OPTIONS` accepts a JSON object string passed through to Docling convert options.
 
-### Content transformer (readability)
+### OpenAI-Compatible LLM
 
-| Variable                        | Default / behavior | Purpose                                                                          |
-| ------------------------------- | ------------------ | -------------------------------------------------------------------------------- |
-| `READABILITY_MIN_CONTENT_CHARS` | `140`              | Minimum content length for `isProbablyReaderable` gate in `readability-default`. |
-| `READABILITY_MIN_SCORE`         | `20`               | Minimum readerable score for `isProbablyReaderable` gate.                        |
-| `READABILITY_MAX_ELEMENTS`      | `0`                | Maximum DOM elements Readability parses; `0` = unlimited (DoS guardrail).        |
+The LLM provider is optional. It is used by the clean and summarize passes when those steps are enabled.
 
-### LLM provider (OpenAI-compatible)
+```dotenv
+LLM_CLEAN_ENABLED=true
+LLM_SUMMARIZE_ENABLED=false
+LLM_BASE_URL=http://llm.example:8080/v1
+LLM_API_KEY=
+LLM_MODEL=llm-task-text
+LLM_CONTEXT_TOKENS=131072
+```
 
-| Variable                   | Default / behavior | Purpose                                                                                                                                 |
-| -------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `LLM_CLEAN_ENABLED`        | `false`            | Enable the clean LLM pass (steps `clean_llm` + `verify_after_clean`). When `true`, `LLM_BASE_URL` and `LLM_MODEL` are required.         |
-| `LLM_SUMMARIZE_ENABLED`    | `false`            | Enable the summarize LLM pass (steps `summarize` + `verify_after_summarize`). When `true`, `LLM_BASE_URL` and `LLM_MODEL` are required. |
-| `LLM_BASE_URL`             | empty              | OpenAI-compatible API base URL, usually ending in `/v1`. Required when an enabled step references `llm-default`.                        |
-| `LLM_API_KEY`              | empty              | Optional LLM bearer token.                                                                                                              |
-| `LLM_MODEL`                | empty              | Model identifier sent to chat completions. Required when an enabled step references `llm-default`.                                      |
-| `LLM_CONTEXT_TOKENS`       | empty in YAML      | Optional model context window in tokens. Empty disables the context-fit gate.                                                           |
-| `LLM_CHARS_PER_TOKEN`      | `3.5`              | Conservative chars-per-token estimator used for the context-fit gate.                                                                   |
-| `LLM_SAFETY_MARGIN_TOKENS` | `128`              | Extra tokens reserved for chat-template framing and estimator drift.                                                                    |
+`LLM_CONTEXT_TOKENS` enables the character-based context-fit gate. Leave it blank to disable that gate.
 
-### Pipeline output and step thresholds
+## Local Processing Knobs
 
-| Variable                        | Default / behavior | Purpose                                                                                                    |
-| ------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `OUTPUT_TARGET_CHARS`           | `25000`            | Desired maximum characters returned by the active pipeline.                                                |
-| `READABILITY_ENABLED`           | `true`             | Enable Readability HTML-to-article extraction (step `clean`). Local operation; no external service needed. |
-| `FETCH_TIMEOUT_SECONDS`         | `20`               | Per-call timeout for the native HTTP source-loading step.                                                  |
-| `FIRECRAWL_TIMEOUT_SECONDS`     | `20`               | Per-call timeout for the Firecrawl source-loading step.                                                    |
-| `DOCLING_TIMEOUT_SECONDS`       | `60`               | Per-call timeout for the Docling OCR source-loading step.                                                  |
-| `LLM_CLEAN_MIN_INPUT_CHARS`     | `1000`             | Minimum body characters before the clean LLM pass runs.                                                    |
-| `LLM_CLEAN_TIMEOUT_SECONDS`     | `60`               | Per-call timeout for the clean LLM pass.                                                                   |
-| `LLM_SUMMARIZE_TIMEOUT_SECONDS` | `60`               | Per-call timeout for the summarize LLM pass.                                                               |
+These knobs do not require external services:
 
-### Concurrency
+| Variable                        | Default     | Purpose                                                    |
+| ------------------------------- | ----------- | ---------------------------------------------------------- |
+| `READABILITY_ENABLED`           | `true`      | Enable article extraction before markdown conversion.      |
+| `READABILITY_MIN_CONTENT_CHARS` | `140`       | Minimum content length for Readability's suitability gate. |
+| `READABILITY_MIN_SCORE`         | `20`        | Minimum readerable score.                                  |
+| `READABILITY_MAX_ELEMENTS`      | `0`         | DOM element parse cap; `0` means unlimited.                |
+| `MDREAM_CLEAN`                  | `true`      | Post-conversion link and whitespace cleanup.               |
+| `OUTPUT_TARGET_CHARS`           | `25000`     | Target maximum output length for summarize/truncate.       |
+| `DEFAULT_OUTPUT_RENDERER`       | `debug-xml` | Renderer used by shipped pipelines.                        |
+| `DEBUG_XML_INCLUDE_SKIPPED`     | `false`     | Include skipped steps in the XML diagnostic footer.        |
 
-| Variable              | Default / behavior | Purpose                                           |
-| --------------------- | ------------------ | ------------------------------------------------- |
-| `SOURCE_CONCURRENCY`  | `1`                | Maximum concurrent source-loading groups.         |
-| `PROCESS_CONCURRENCY` | `5`                | Maximum concurrent processing (transform) groups. |
-| `LLM_CONCURRENCY`     | `1`                | Maximum concurrent LLM workflow groups.           |
+Renderer options:
 
-### Output rendering
+- `debug-xml` returns markdown plus an XML diagnostic footer.
+- `passthrough` returns the final markdown body without the footer.
 
-| Variable                    | Default / behavior | Purpose                                                                     |
-| --------------------------- | ------------------ | --------------------------------------------------------------------------- |
-| `DEFAULT_OUTPUT_RENDERER`   | `debug-xml`        | Output renderer name for the active pipeline when set to a non-empty value. |
-| `DEBUG_XML_INCLUDE_SKIPPED` | `false`            | Include skipped steps in the debug-xml footer (`true`/`false`).             |
+## Timeouts And Concurrency
 
-### Inbound authentication
+The shipped config exposes three concurrency groups:
 
-| Variable          | Default / behavior | Purpose                                                 |
-| ----------------- | ------------------ | ------------------------------------------------------- |
-| `OWUI_AUTH_TOKEN` | empty              | Optional bearer token for the Open WebUI adapter route. |
-| `JINA_AUTH_TOKEN` | empty              | Optional bearer token for the Jina-style adapter route. |
+| Variable              | Default | Purpose                                    |
+| --------------------- | ------- | ------------------------------------------ |
+| `SOURCE_CONCURRENCY`  | `1`     | Maximum concurrent source-loading groups.  |
+| `PROCESS_CONCURRENCY` | `5`     | Maximum concurrent local transform groups. |
+| `LLM_CONCURRENCY`     | `1`     | Maximum concurrent LLM workflow groups.    |
 
-`.env.example` shows practical local overrides for concurrency, output size, clean-pass thresholds, and `LLM_CONTEXT_TOKENS`. Leave an env value blank or unset it when you want the YAML fallback or schema default instead.
+Important timeout variables:
 
-## Environment Substitution Syntax
+| Variable                        | Default | Purpose                          |
+| ------------------------------- | ------- | -------------------------------- |
+| `FETCH_TIMEOUT_SECONDS`         | `20`    | Native HTTP source load timeout. |
+| `FIRECRAWL_TIMEOUT_SECONDS`     | `20`    | Firecrawl source load timeout.   |
+| `DOCLING_TIMEOUT_SECONDS`       | `60`    | Docling source load timeout.     |
+| `LLM_CLEAN_TIMEOUT_SECONDS`     | `60`    | Clean-pass timeout.              |
+| `LLM_SUMMARIZE_TIMEOUT_SECONDS` | `60`    | Summarize-pass timeout.          |
 
-YAML substitution happens before schema validation.
-
-| Syntax             | Meaning                                                         |
-| ------------------ | --------------------------------------------------------------- |
-| `${VAR}`           | Resolves to the value of `VAR`, or `""` if unset.               |
-| `${VAR:-fallback}` | Uses `VAR` when set to a non-empty value, otherwise `fallback`. |
-| `$${VAR}`          | Literal escape. Produces `${VAR}` in the parsed config.         |
-
-Substitution applies recursively to YAML string values. Non-string YAML values are left as YAML values and then parsed by schemas.
-
-Substitution itself is string-only. Numeric and boolean fields recover their types during schema parsing, and blank env values use the field's schema default when that field has one. Blank strings remain meaningful for token fields such as `FIRECRAWL_API_KEY`, `DOCLING_API_KEY`, `LLM_API_KEY`, `OWUI_AUTH_TOKEN`, and `JINA_AUTH_TOKEN`, where empty means no token.
-
-Some opaque record fields (`extraBody`, Docling `options`, Firecrawl `options`, future providers) also accept a whole JSON-string blob from a single env var — see [Opaque Passthrough Fields](CUSTOMIZATION.md#opaque-passthrough-fields) in customization for details.
-
-Docker Compose performs its own interpolation before the container starts. The shipped Compose files pass all provider variables through with empty defaults (`${VAR:-}`) so the container always starts and the Node process validates only the active pipeline's providers at startup.
+Adjacent steps in the same concurrency group share one limiter slot. In the shipped `full` pipeline, the LLM pass and its URL verification step share the `llm` group.
 
 ## Authentication
 
-Inbound authentication is configured per HTTP adapter in YAML. The default YAML wires adapter bearer tokens to `OWUI_AUTH_TOKEN` and `JINA_AUTH_TOKEN`.
+Inbound bearer tokens are configured per HTTP adapter:
 
-- Empty token means the adapter route is open.
-- Non-empty token requires `Authorization: Bearer <token>`.
-- `GET /health` is always open.
+| Variable          | Route    | Behavior                                                                         |
+| ----------------- | -------- | -------------------------------------------------------------------------------- |
+| `OWUI_AUTH_TOKEN` | `POST /` | Empty leaves the route open; non-empty requires `Authorization: Bearer <token>`. |
+| `JINA_AUTH_TOKEN` | `GET /r` | Empty leaves the route open; non-empty requires `Authorization: Bearer <token>`. |
 
-Outbound authentication is configured per provider:
+`GET /health` is always open.
+
+Outbound tokens:
 
 - `FIRECRAWL_API_KEY` is sent as bearer auth to Firecrawl when set.
-- `DOCLING_API_KEY` is sent via the `X-Api-Key` header to Docling Serve when set.
+- `DOCLING_API_KEY` is sent as `X-Api-Key` to Docling Serve when set.
 - `LLM_API_KEY` is sent as bearer auth to the OpenAI-compatible endpoint when set.
 
-## Local And Container Networking
+## Docker Networking
 
 When running directly with Node, `localhost` means your machine.
 
 When running in Docker, `localhost` inside the container means the container itself. For host services, use a LAN address or `host.docker.internal` if your Docker environment supports it. For services in the same Compose project, use the Compose service name.
 
-## Common Startup Failures
+The Compose files read `.env` for interpolation. Running `docker compose config` prints expanded values, so avoid doing that in contexts where local endpoints or tokens should stay private.
 
-- Provider config validation: a reachable provider (referenced by an active pipeline) has an empty required field, e.g. `"firecrawl baseUrl is required"`. The error names the config field, not the env var.
-- Invalid YAML shape: the top-level YAML structure failed the coarse schema in `src/config/yaml/yaml-config.ts`.
-- Unknown type: a YAML `type` does not exist in the selected built-in descriptor bundles.
-- Unknown reference: a pipeline, output renderer, provider, or concurrency group name references an instance that was not declared.
-- Missing template file: an `llm-pass` step points at a template path that cannot be read relative to the YAML file directory.
+Compose-only variables:
+
+| Variable           | Used by                                       | Purpose                                         |
+| ------------------ | --------------------------------------------- | ----------------------------------------------- |
+| `LLMC_LOCAL_IMAGE` | [compose.yaml](../compose.yaml)               | Local image tag for builds from the checkout.   |
+| `LLMC_IMAGE_TAG`   | [compose.deploy.yaml](../compose.deploy.yaml) | GHCR image tag for published-image deployments. |
+
+## Environment Substitution
+
+YAML substitution happens before schema validation:
+
+| Syntax             | Meaning                                     |
+| ------------------ | ------------------------------------------- |
+| `${VAR}`           | Value of `VAR`, or `""` if unset.           |
+| `${VAR:-fallback}` | `VAR` when non-empty, otherwise `fallback`. |
+| `$${VAR}`          | Literal `${VAR}` in the parsed config.      |
+
+Numeric and boolean strings are parsed later by built-in schemas. Blank values use schema defaults when the field supports that. Token fields keep blank strings meaningful: blank usually means no token.
+
+Opaque fields such as `FIRECRAWL_OPTIONS`, `DOCLING_OPTIONS`, and LLM `extraBody` accept JSON object strings. See [CUSTOMIZATION.md](CUSTOMIZATION.md#opaque-passthrough-fields) for authoring details.
+
+## Startup Troubleshooting
+
+Common failures:
+
+- Provider config validation: an active pipeline references a provider with a missing required field, such as an empty Firecrawl `baseUrl`.
+- Unknown type: YAML names a `type` that is not present in the selected descriptor bundle.
+- Unknown reference: a pipeline, provider, renderer, transformer, or concurrency group references a name that was not declared.
+- Invalid YAML shape: the top-level YAML did not match the expected schema.
+- Missing template file: an `llm-pass` step points to a template path that cannot be loaded relative to the YAML file directory.
+
+Validation is lazy for optional pieces. An unused provider with missing environment variables does not fail startup; a reachable provider in an active pipeline does.
+
+## Script-Only Variables
+
+Helper scripts use their own variables and the Node app ignores them:
+
+| Variable      | Used by                                        | Purpose                                       |
+| ------------- | ---------------------------------------------- | --------------------------------------------- |
+| `LOADER_BASE` | `scripts/smoke-*.ps1`, `scripts/inspect-*.ps1` | Base URL of a running LLM Context Loader.     |
+| `SEARX_BASE`  | `scripts/gather-urls.ps1`                      | Base URL of a SearXNG instance for URL seeds. |

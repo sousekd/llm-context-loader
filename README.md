@@ -1,25 +1,64 @@
 # LLM Context Loader
 
-> URL-in, markdown-out context loader for LLM tooling.
+> URL in, markdown out for self-hosted LLM tooling.
 
 [![ci](https://github.com/sousekd/llm-context-loader/actions/workflows/ci.yml/badge.svg)](https://github.com/sousekd/llm-context-loader/actions/workflows/ci.yml)
 [![release](https://github.com/sousekd/llm-context-loader/actions/workflows/release.yml/badge.svg)](https://github.com/sousekd/llm-context-loader/actions/workflows/release.yml)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![node](https://img.shields.io/badge/node-22+-brightgreen.svg)](https://nodejs.org/)
 
-LLM Context Loader is a small HTTP service that turns URLs into markdown for LLM context. It exposes Open WebUI and Jina Reader-style HTTP endpoints, fetches pages through built-in or external providers, can run LLM passes, and renders markdown with an optional XML diagnostic footer. It handles single URLs — crawling, search, model serving, storage, and retrieval stay outside this tool.
+LLM Context Loader is a small HTTP service that turns web URLs into markdown that can be passed to an LLM. It is meant for self-hosted AI stacks where search returns links, but another component still needs to fetch, clean, convert, and optionally refine those pages before they enter the model context.
 
-## Current Shape
+The public contract is deliberately small: callers send URLs, configured pipelines load and process each URL, and adapters return markdown in the shape the caller expects. The implementation behind that contract is meant to be replaceable: source providers, transformers, LLM passes, renderers, pipeline steps, and adapters are all separate building blocks.
 
-- **Pipelines:** `full` (default; full-featured with toggleable Docling, Firecrawl, Readability, and LLM passes) and `smoke` (zero-dependency HTTP fetch + aggressive markdown + truncation), selected via `DEFAULT_PIPELINE`.
-- **Source providers:** native HTTP fetch, Firecrawl, Docling.
-- **Content transformers:** `readability` (article HTML extraction), `mdream` (HTML to markdown).
-- **LLM providers:** OpenAI-compatible `/chat/completions`.
-- **Output renderers:** `debug-xml` and `passthrough`, selected per pipeline in YAML.
+```mermaid
+flowchart LR
+  subgraph callers[Callers]
+    direction TB
+    owui[Open WebUI]
+    jina[Jina-style clients]
+  end
+
+  owui --> adapters
+  jina --> adapters
+
+  subgraph service[LLM Context Loader]
+    direction TB
+    adapters[HTTP adapters] --> pipeline[Configurable pipeline]
+    pipeline --> source[Source loading]
+    pipeline --> process[Clean and convert]
+    pipeline --> optionalLlm[Optional LLM passes]
+    pipeline --> render[Markdown renderer]
+  end
+
+  source --> native[Native HTTP]
+  source --> firecrawl[Firecrawl optional]
+  source --> docling[Docling optional]
+  source -. planned .-> playwright[Playwright planned]
+
+  process --> readability[Readability]
+  process --> mdream[mdream]
+
+  render --> markdown[Markdown output]
+
+  classDef optional stroke-dasharray: 4 3;
+  classDef planned stroke-dasharray: 6 4,color:#666;
+  class firecrawl,docling optional;
+  class playwright planned;
+```
+
+## What Ships Today
+
+- HTTP adapters for Open WebUI external web loader requests and limited Jina Reader-style `GET /r` requests.
+- A default `full` pipeline with source loading, Readability, mdream HTML-to-markdown conversion, optional LLM clean/summarize passes, URL verification, truncation, and optional XML diagnostics.
+- Source providers for native HTTP fetch, Firecrawl, and Docling.
+- Docker and GHCR image support.
+
+The `smoke` pipeline is also shipped for testing and debugging. It uses only native HTTP fetch, aggressive mdream conversion, and truncation.
 
 ## Quick Start
 
-Requires Node 22+ for local runs.
+Requires Node 22+.
 
 ```bash
 npm install
@@ -27,7 +66,7 @@ cp .env.example .env
 npm run dev
 ```
 
-PowerShell equivalent:
+PowerShell:
 
 ```powershell
 npm install
@@ -46,7 +85,7 @@ Both `npm run dev` and `npm start` load `.env` through Node's `--env-file-if-exi
 
 ## Docker
 
-Local image from the current checkout:
+Build and run locally from the checkout:
 
 ```bash
 cp .env.example .env
@@ -54,7 +93,7 @@ docker compose up --build -d
 curl http://localhost:3010/health
 ```
 
-Published image from GitHub Container Registry:
+Run the published image:
 
 ```bash
 cp .env.example .env
@@ -62,11 +101,9 @@ docker compose -f compose.deploy.yaml pull
 docker compose -f compose.deploy.yaml up -d
 ```
 
-The deploy compose file requires `LLMC_IMAGE_TAG`. The example env file uses `latest`, but repeatable deployments should pin it to an immutable release tag.
+For repeatable deployments, set `LLMC_IMAGE_TAG` in `.env` to an immutable release tag instead of `latest`.
 
-The `smoke` pipeline needs no provider config — it uses native HTTP fetch only. The Compose files pass all variables through without failing early; the service validates only the active pipeline's providers at startup. If Firecrawl or the LLM server runs on the host, use a LAN address or `host.docker.internal` instead of `localhost`.
-
-## API
+## HTTP API
 
 | Method | Path       | Purpose                                                              |
 | ------ | ---------- | -------------------------------------------------------------------- |
@@ -86,23 +123,23 @@ environment:
 
 When `OWUI_AUTH_TOKEN` is configured, set `EXTERNAL_WEB_LOADER_API_KEY` to the same value.
 
-## Configuration
+## Configuration And Customization
 
-There are two layers of configuration:
+There are two layers:
 
-- Bootstrap environment variables choose the config file, bind address, port, and logging.
-- YAML config declares HTTP adapters, providers, renderers, pipelines, steps, templates, timeouts, and concurrency groups.
+- Bootstrap environment variables choose the config file, host, port, and logging behavior.
+- YAML declares adapters, providers, renderers, pipelines, steps, templates, timeouts, and concurrency groups.
 
-For normal operation with the shipped YAML, start with [.env.example](.env.example) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md). For changing pipeline structure or built-in knobs, read [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md).
+Start with [.env.example](.env.example) and [docs/CONFIGURATION.md](docs/CONFIGURATION.md) when you want to run the shipped service. Read [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) when you want to change pipeline wiring or add building blocks.
 
-## Developer Docs
+## Documentation
 
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) describes the internal architecture and dependency boundaries.
-- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) covers running and tuning the shipped configuration.
-- [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) documents the YAML configuration surface.
-- [docs/ROADMAP.md](docs/ROADMAP.md) records scope boundaries and direction.
-- [docs/TESTING.md](docs/TESTING.md) describes the test layout, commands, and helpers.
-- [docs/RELEASING.md](docs/RELEASING.md) records the release and deployment workflow.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains the extensible architecture and internal boundaries.
+- [docs/CONFIGURATION.md](docs/CONFIGURATION.md) is the operator guide for running the shipped configuration.
+- [docs/CUSTOMIZATION.md](docs/CUSTOMIZATION.md) covers YAML pipelines and extension points.
+- [docs/ROADMAP.md](docs/ROADMAP.md) records scope and direction.
+- [docs/TESTING.md](docs/TESTING.md) describes tests and useful commands.
+- [docs/RELEASING.md](docs/RELEASING.md) records release and deployment workflow.
 
 ## Development Commands
 
@@ -112,8 +149,6 @@ npm run typecheck:all   # source + tests typecheck
 npm run build           # tsc -> dist/
 npm test                # vitest run --coverage
 ```
-
-Tests live under `tests/` and mirror `src/`. They use dependency injection and plain stubs.
 
 ## License
 

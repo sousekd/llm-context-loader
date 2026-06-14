@@ -28,7 +28,7 @@ Use `:edge` or `:main` for staging or for testing unreleased changes.
 - `main` is the long-lived branch and is always deployable.
 - Short-lived `feat/<topic>`, `fix/<topic>`, or `chore/<topic>` branches are optional.
 - Direct push to `main` is acceptable for this repository when appropriate.
-- Pull requests should pass the `node` and `docker` checks before merge.
+- Let a pull request's `node` and `docker` checks finish before merging. A squash merge deletes the head branch, which cancels any of its still-running checks.
 
 ## Versioning
 

@@ -35,3 +35,14 @@ Inspection commands such as `git status`, `git diff`, and `git log` are fine. St
 - While the project is pre-1.0, breaking changes ship as a minor bump, not a major one. See [docs/RELEASING.md](../RELEASING.md).
 
 Release and image-tag details live in [docs/RELEASING.md](../RELEASING.md).
+
+## Pull Request Mechanics
+
+These keep a PR smooth from a non-interactive agent shell (verified on Windows PowerShell):
+
+- Match the shape of recent PRs before writing a body: `gh pr list --state merged` then `gh pr view <n>`. This repo favors a short prose lead, plain section headings with terse bullets, `(breaking)` tags on changed sections, a final `Breaking` section, and a closing "updated to match" line.
+- Pass a multi-line PR body with `--body-file <tempfile>`, not inline `--body`; embedded newlines are fragile in PowerShell. Delete the temp file afterward.
+- Poll checks with `gh pr checks <n>` or `gh pr checks <n> --json name,state,bucket`. Do not use `--watch`: it opens a full-screen TUI (alternate buffer) that hangs a non-interactive terminal.
+- Let required checks finish before merging. `gh pr merge --squash --delete-branch` closes the PR and deletes the head branch, which cancels that branch's still-running check runs. (CI also sets `concurrency.cancel-in-progress`, so a new push to the same ref supersedes an older run.)
+- `gh pr merge --delete-branch` already fast-forwards local `main` after the merge; a follow-up `git pull --ff-only` only confirms it.
+- Remove any temp PR-body file and close helper terminals when done.
