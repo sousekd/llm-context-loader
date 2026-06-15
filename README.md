@@ -17,18 +17,23 @@ flowchart LR
     direction TB
     owui[Open WebUI]
     jina[Jina-style clients]
+    mcp[MCP server planned]
+    cli[CLI planned]
   end
 
   owui --> adapters
   jina --> adapters
+  mcp -. planned .-> adapters
+  cli -. planned .-> adapters
 
   subgraph service[LLM Context Loader]
     direction TB
-    adapters[HTTP adapters] --> pipeline[Configurable pipeline]
+    adapters[Adapters, HTTP today] --> pipeline[Configurable pipeline]
     pipeline --> source[Source loading]
     pipeline --> process[Clean and convert]
     pipeline --> optionalLlm[Optional LLM passes]
     pipeline --> render[Markdown renderer]
+    pipeline -. planned .-> observability[Observability / management UI planned]
   end
 
   source --> native[Native HTTP]
@@ -44,7 +49,7 @@ flowchart LR
   classDef optional stroke-dasharray: 4 3;
   classDef planned stroke-dasharray: 6 4,color:#666;
   class firecrawl,docling optional;
-  class playwright planned;
+  class playwright,mcp,cli,observability planned;
 ```
 
 ## What Ships Today
