@@ -54,9 +54,9 @@ flowchart LR
 
 ## What Ships Today
 
-- HTTP adapters for Open WebUI external web loader requests and limited Jina Reader-style `GET /r` requests.
-- A default `full` pipeline with source loading, Readability, mdream HTML-to-markdown conversion, optional LLM clean/summarize passes, URL verification, truncation, and optional XML diagnostics.
-- Source providers for native HTTP fetch, Firecrawl, and Docling.
+- HTTP adapters for [Open WebUI](https://github.com/open-webui/open-webui) external web loader requests and limited [Jina Reader](https://github.com/jina-ai/reader)-style `GET /r` requests.
+- A default `full` pipeline with source loading, [Readability](https://github.com/mozilla/readability), [mdream](https://github.com/harlan-zw/mdream) HTML-to-markdown conversion, optional LLM clean/summarize passes, URL verification, truncation, and optional XML diagnostics.
+- Source providers for native HTTP fetch, [Firecrawl](https://github.com/firecrawl/firecrawl), and [Docling](https://github.com/docling-project/docling).
 - Docker and GHCR image support.
 
 The `smoke` pipeline is also shipped for testing and debugging. It uses only native HTTP fetch, aggressive mdream conversion, and truncation.

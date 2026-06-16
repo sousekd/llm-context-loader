@@ -24,7 +24,7 @@ Current provider implementations are intentionally few. The interfaces exist so 
 ## Coming soon
 
 1. **Playwright source provider** to remove the hard dependency on a running Firecrawl instance for HTML pages.
-2. **LLM pass auto-repair.** Repair URLs and code blocks, instead of mere detection.
+2. **Support PDF.js** to extract text from PDF documents without an external service.
 3. **Diagnostics footer cleanup.** Consolidate the `<loader_info ... />` payload for consistency and readability.
 4. **Better defaults and prompts.** Test and tune what ships.
 
@@ -32,7 +32,8 @@ Current provider implementations are intentionally few. The interfaces exist so 
 
 Near-term additions once the work above settles.
 
-- **Docling content transformer** to convert PDFs, Office documents, and other document-type files to markdown.
+- **LLM pass auto-repair.** Repair URLs and code blocks, instead of mere detection.
+- **Jina Reader source provider** to get markdown from a self-hosted Jina Reader instance.
 - **Crawl4AI source provider** as a potentially better alternative to Firecrawl.
 
 ## Mid term
